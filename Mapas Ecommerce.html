@@ -1,0 +1,2480 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestor de Coberturas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=Cabin:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+<style>
+:root {
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --card: #f0f2f5;
+  --border: #dde1e7;
+  --accent: #00a36c;
+  --accent2: #e05a1f;
+  --accent3: #2563eb;
+  --text: #1a1d23;
+  --muted: #6b7585;
+  --danger: #dc2626;
+  --warn: #d97706;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+ 
+/* HEADER */
+header {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  z-index: 1000;
+}
+.logo { font-family: 'Cabin', sans-serif; font-weight: 700; font-size: 18px; letter-spacing: -0.5px; }
+.logo span { color: #59c095; }
+.header-info { display: flex; gap: 20px; align-items: center; }
+.stat-pill {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.stat-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.stat-pill .dot.warn { background: var(--warn); }
+ 
+/* MAIN LAYOUT */
+.main { display: flex; flex: 1; overflow: hidden; }
+ 
+/* SIDEBAR */
+.sidebar {
+  width: 320px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: width 0.25s ease;
+}
+.sidebar.collapsed {
+  width: 52px;
+}
+.sidebar.collapsed .tab-content,
+.sidebar.collapsed .search-box,
+.sidebar.collapsed #store-list {
+  display: none !important;
+}
+.sidebar.collapsed .tab-label {
+  display: none;
+}
+.sidebar.collapsed .sidebar-tabs {
+  flex-direction: column;
+  border-bottom: none;
+  padding: 8px 0;
+  gap: 4px;
+}
+.sidebar.collapsed .tab-btn {
+  padding: 10px 0;
+  font-size: 18px;
+  border-bottom: none;
+  border-right: 2px solid transparent;
+}
+.sidebar.collapsed .tab-btn.active {
+  border-right-color: var(--accent);
+  border-bottom-color: transparent;
+  color: var(--accent);
+}
+.sidebar-toggle {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  width: 100%;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+.sidebar-toggle:hover { color: var(--text); }
+.sidebar.collapsed .sidebar-toggle {
+  justify-content: center;
+  padding-right: 0;
+}
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.tab-btn {
+  flex: 1;
+  padding: 12px 8px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  letter-spacing: 0.3px;
+}
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-content { display: none; flex: 1; overflow-y: auto; padding: 14px; }
+.tab-content.active { display: flex; flex-direction: column; gap: 8px; }
+ 
+/* STORE CARDS */
+.store-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.18s;
+  position: relative;
+  overflow: hidden;
+}
+.store-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  border-radius: 3px 0 0 3px;
+}
+.store-card:hover { border-color: var(--accent); transform: translateX(2px); }
+.store-card.active-card { border-color: var(--accent); background: rgba(0,229,160,0.05); }
+.card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.card-code { font-family: 'Cabin', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+.card-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.badge-ok { background: rgba(0,229,160,0.15); color: var(--accent); }
+.badge-warn { background: rgba(255,211,42,0.15); color: var(--warn); }
+.card-name { font-size: 14px; font-weight: 600; margin-bottom: 4px; font-family: 'Cabin', sans-serif; }
+.card-meta { font-size: 11px; color: var(--muted); }
+.card-actions { display: flex; gap: 6px; margin-top: 8px; }
+.btn-sm {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  transition: all 0.15s;
+}
+.btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+.btn-sm.primary { background: var(--accent); color: #000; border-color: var(--accent); }
+.btn-sm.primary:hover { opacity: 0.85; }
+.btn-sm.danger { border-color: rgba(255,71,87,0.4); color: var(--danger); }
+.btn-sm.danger:hover { background: rgba(255,71,87,0.1); }
+ 
+/* SEARCH BOX */
+.search-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.search-box input {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  outline: none;
+  flex: 1;
+}
+.search-box input::placeholder { color: var(--muted); }
+.search-icon { color: var(--muted); font-size: 14px; }
+ 
+/* PANEL DERECHO */
+.right-panel {
+  width: 280px;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: none;
+}
+.panel-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  font-family: 'SyneCabin', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.panel-body { padding: 14px; flex: 1; overflow-y: auto; }
+ 
+/* INFO DETAIL */
+.info-section { margin-bottom: 16px; }
+.info-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; font-weight: 600; }
+.info-value { font-size: 13px; font-weight: 400; }
+.info-value.highlight { color: var(--accent); font-weight: 600; font-family: 'Cabin', sans-serif; }
+.info-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.info-row .icon { font-size: 14px; width: 18px; }
+.info-row .val { font-size: 12px; }
+ 
+/* MAPA */
+#map { flex: 1; }
+ 
+/* LOOKUP */
+.lookup-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.lookup-title { font-size: 12px; font-weight: 600; margin-bottom: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.5px; }
+.input-group { display: flex; gap: 6px; }
+.input-field {
+  flex: 1;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 12px;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.input-field:focus { border-color: var(--accent); }
+.btn-lookup {
+  padding: 8px 14px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.btn-lookup:hover { opacity: 0.85; }
+ 
+.result-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-top: 10px;
+  display: none;
+}
+.result-box.visible { display: block; }
+.result-found { border-color: var(--accent); }
+.result-notfound { border-color: var(--danger); }
+ 
+/* OVERLAP WARNING */
+.overlap-warn {
+  background: rgba(255,71,87,0.1);
+  border: 1px solid rgba(255,71,87,0.4);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--danger);
+  display: none;
+  margin-top: 8px;
+}
+.overlap-warn.visible { display: block; }
+ 
+/* DRAW SECTION */
+.draw-section { padding: 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
+.draw-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+.draw-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+.draw-target select {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  outline: none;
+  flex: 1;
+  cursor: pointer;
+}
+.draw-target select option { background: var(--card); }
+.btn-draw {
+  width: 100%;
+  padding: 10px;
+  background: linear-gradient(135deg, var(--accent3), var(--accent));
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  font-family: 'Cabin', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  letter-spacing: 0.3px;
+}
+.btn-draw:hover { opacity: 0.9; }
+.btn-draw:disabled { opacity: 0.4; cursor: not-allowed; }
+ 
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+ 
+/* LEAFLET OVERRIDES */
+.leaflet-container { background: #0d1117; font-family: 'DM Sans', sans-serif; }
+.leaflet-popup-content-wrapper {
+  background: var(--card) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6) !important;
+  padding: 0 !important;
+}
+.leaflet-popup-tip { background: var(--card) !important; }
+.leaflet-popup-content { margin: 0 !important; }
+.popup-inner { padding: 16px 18px; min-width: 220px; }
+.popup-code { font-family: 'Cabin', sans-serif; font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px; }
+.popup-name { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+.popup-divider { height: 1px; background: var(--border); margin: 10px 0; }
+.popup-row { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px; font-size: 12px; }
+.popup-icon { font-size: 13px; width: 16px; flex-shrink: 0; margin-top: 1px; }
+.popup-field-label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.popup-dl-btn {
+  margin-top: 12px;
+  width: 100%;
+  padding: 8px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 7px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+ 
+/* COLOR SWATCH */
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+ 
+/* NO DATA STATE */
+.empty-state { text-align: center; padding: 30px 20px; color: var(--muted); font-size: 13px; }
+ 
+/* TOAST */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  z-index: 9999;
+  opacity: 0;
+  transition: all 0.3s;
+  pointer-events: none;
+  white-space: nowrap;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.success { border-color: var(--accent); color: var(--accent); }
+#toast.error { border-color: var(--danger); color: var(--danger); }
+#toast.warn { border-color: var(--warn); color: var(--warn); }
+ 
+/* OVERLAP BADGE ON MAP */
+.leaflet-marker-icon { transition: transform 0.2s; }
+</style>
+</head>
+<body>
+ 
+<header>
+  <div class="logo">Mapas <span>Ecommerce</span></div>
+  <div class="header-info">
+    <div class="stat-pill"><span class="dot"></span> <span id="stat-nacional">0 tiendas nacional</span></div>
+    <div id="stat-grupos-container" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"></div>
+  </div>
+</header>
+ 
+<div class="main">
+  <!-- SIDEBAR IZQUIERDO -->
+  <div class="sidebar">
+    <div class="sidebar-tabs">
+      <button class="tab-btn active" onclick="switchTab('tiendas')">🏪 <span class="tab-label">Tiendas</span></button>
+      <button class="tab-btn" onclick="switchTab('buscar')">🔍 <span class="tab-label">Buscar</span></button>
+      <button class="tab-btn" onclick="switchTab('nueva')">✏️ <span class="tab-label">Nueva</span></button>
+    </div>
+    <button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebar()" title="Contraer panel">‹</button>
+ 
+    <!-- TAB TIENDAS -->
+    <div id="tab-tiendas" class="tab-content active">
+      <div class="search-box">
+        <span class="search-icon">🔎</span>
+        <input type="text" id="search-stores" placeholder="Buscar por código o nombre..." oninput="filterStores(this.value)">
+      </div>
+      <div id="store-list"></div>
+    </div>
+ 
+    <!-- TAB BUSCAR COBERTURA -->
+    <div id="tab-buscar" class="tab-content">
+      <div class="lookup-box">
+        <div class="lookup-title">📍 Verificar dirección</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Ingresa coordenadas para saber a qué tienda y cobertura pertenece</p>
+        <div class="input-group" style="margin-bottom:6px">
+          <input type="text" class="input-field" id="lookup-coords" placeholder="Coordenadas o enlace de Google Maps" style="width:100%">
+        </div>
+        <button class="btn-lookup" style="width:100%;margin-top:4px" onclick="lookupCoordinate()">Verificar cobertura</button>
+        <button id="btn-clear-pin" onclick="clearLookupPin()" style="display:none;width:100%;margin-top:6px;padding:8px;background:none;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;cursor:pointer;color:var(--danger)">✕ Limpiar búsqueda</button>
+        <div class="result-box" id="lookup-result"></div>
+        <div class="overlap-warn" id="overlap-warn"></div>
+      </div>
+    </div>
+ 
+    <!-- TAB NUEVA COBERTURA -->
+    <div id="tab-nueva" class="tab-content">
+      <div class="lookup-box">
+  <div class="lookup-title" style="color:var(--accent3)">📥 Importar JSON</div>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Sube un archivo de cobertura y obtén el código listo para pegar en el HTML</p>
+  <label style="display:block;border:2px dashed var(--border);border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:all 0.2s;font-size:12px;color:var(--muted)" id="import-drop" ondragover="event.preventDefault();this.style.borderColor='var(--accent3)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="onImportDrop(event)">
+    <input type="file" id="import-input" accept=".json" style="display:none" onchange="processImportFile(this.files[0])">
+    <div style="font-size:22px;margin-bottom:6px">📂</div>
+    <div style="font-weight:600;color:var(--text);margin-bottom:2px">Arrastra el JSON aquí</div>
+    <div>o haz clic para seleccionar</div>
+    <div onclick="event.stopPropagation();document.getElementById('import-input').click()" style="margin-top:10px;display:inline-block;padding:6px 16px;background:var(--accent3);color:#fff;border-radius:6px;font-weight:600;font-size:12px;cursor:pointer">Seleccionar</div>
+  </label>
+  <div id="import-result" style="display:none;margin-top:10px">
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Zona detectada</div>
+    <div id="import-zona" style="font-size:13px;font-weight:600;color:var(--accent);margin-bottom:12px">—</div>
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">POLYGONS_RAW — copia y pega</div>
+    <div style="position:relative;background:#1e2433;border-radius:8px;padding:10px">
+      <button onclick="copyImportCode()" id="btn-import-copy" style="position:absolute;top:8px;right:8px;padding:3px 8px;background:var(--accent3);color:#fff;border:none;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer">Copiar</button>
+      <div id="import-code" style="font-family:monospace;font-size:10px;color:#a5f3c8;white-space:pre-wrap;word-break:break-all;max-height:100px;overflow-y:auto;padding-right:50px;line-height:1.5">—</div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">Pega este bloque dentro de <code style="background:var(--card);padding:1px 4px;border-radius:3px">POLYGONS_RAW</code> en tu HTML</div>
+  </div>
+</div>
+      <div class="lookup-box">
+        <div class="lookup-title">✏️ Dibujar cobertura</div>
+        <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Selecciona la tienda destino y dibuja el polígono en el mapa. El sistema verificará solapamientos automáticamente.</p>
+        <div class="draw-target">
+          <span style="font-size:13px">🏪</span>
+          <select id="draw-store-select">
+            <option value="">— Selecciona tienda —</option>
+          </select>
+        </div>
+        <button class="btn-draw" onclick="startDrawing()">Iniciar dibujo</button>
+        <div id="draw-status" style="margin-top:8px;font-size:12px;color:var(--muted);text-align:center"></div>
+      </div>
+      <div class="lookup-box" id="new-coverage-box" style="display:none">
+        <div class="lookup-title" style="color:var(--warn)">⚠️ Cobertura dibujada</div>
+        <div id="new-coverage-info" style="font-size:12px;margin-bottom:10px"></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn-sm primary" onclick="saveNewCoverage()" style="flex:1;padding:8px">Guardar</button>
+          <button class="btn-sm danger" onclick="cancelNewCoverage()" style="flex:1;padding:8px">Cancelar</button>
+        </div>
+        <button class="btn-sm" onclick="exportNewCoverage()" style="width:100%;margin-top:6px;padding:8px;border-color:var(--accent3);color:var(--accent3)">⬇ Descargar JSON</button>
+      </div>
+    </div>
+  </div>
+ 
+  <!-- MAPA -->
+  <div id="map"></div>
+ 
+  <!-- PANEL DERECHO: INFO DETALLE -->
+  <div class="right-panel" id="right-panel">
+    <div class="panel-header" style="display:flex;align-items:center;justify-content:space-between">
+      Detalle de tienda
+      <button onclick="toggleRightPanel()" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;padding:0;line-height:1" title="Cerrar">✕</button>
+    </div>
+    <div class="panel-body" id="detail-panel">
+      <div class="empty-state">
+        <div style="font-size:32px;margin-bottom:10px">🏪</div>
+        <div>Selecciona una tienda del panel izquierdo o haz clic en una cobertura del mapa</div>
+      </div>
+    </div>
+  </div>
+</div>
+<button id="btn-open-panel" onclick="toggleRightPanel()" title="Detalle de tienda" style="
+  position: fixed;
+  bottom: 64px;
+  right: 24px;
+  z-index: 2000;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  font-size: 16px;
+">☰</button>
+<button id="btn-fullmap" onclick="toggleFullMap()" title="Pantalla completa" style="
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2000;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  font-size: 16px;
+">⛶</button> 
+<div id="toast"></div>
+ 
+<script>
+// =============================================
+// DATOS DE TIENDAS — Aquí agregas las tiendas
+// Para añadir más: copia un bloque y cambia los datos
+// =============================================
+const STORES_DATA = [
+  // =============================================
+  // AMARKET
+  // =============================================
+  {
+    keyBodega: "B1MA",
+    nombre: "Amarket Santa Mónica",
+    latitud: -17.799458,
+    longitud: -63.220915,
+    cargoLider: "Líder de tienda",
+    lider: "Lucy Erika Medina Saldaña",
+    celularCorp: "+591 61396550",
+    pos: [{ nombre: "http://10.93.0.7/pos", url: "http://10.93.0.7/pos" }],
+    zona: "Oeste",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(255,107,53,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MB",
+    nombre: "Amarket Santos Dumont 3er Anillo",
+    latitud: -17.820562,
+    longitud: -63.184182,
+    cargoLider: "Líder de tienda",
+    lider: "Carlos Franco Raldes Antelo",
+    celularCorp: "+591 61558765",
+    pos: [{ nombre: "http://10.159.0.7/pos", url: "http://10.159.0.7/pos" }],
+    zona: "Sur",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(255,107,53,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MC",
+    nombre: "Amarket Emperador",
+    latitud: -17.759683,
+    longitud: -63.166675,
+    cargoLider: "Líder de tienda",
+    lider: "Por definir",
+    celularCorp: "+591 61396552",
+    pos: [{ nombre: "http://10.158.0.7/pos", url: "http://10.158.0.7/pos" }],
+    zona: "Centro",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(255,107,53,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MD",
+    nombre: "Amarket Banzer 7mo y 8vo Anillo",
+    latitud: -17.719367,
+    longitud: -63.162624,
+    cargoLider: "Líder de tienda",
+    lider: "Yanahina Cuñanchiro Vega",
+    celularCorp: "+591 61557145",
+    pos: [{ nombre: "http://10.197.0.7/pos", url: "http://10.197.0.7/pos" }],
+    zona: "Norte",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(255,107,53,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1ME",
+    nombre: "Amarket Equipetrol 3er y 4to Anillo",
+    latitud: -17.758756510838587,
+    longitud: -63.19954972583763,
+    cargoLider: "Líder de tienda",
+    lider: "Camila Pilar Valdez",
+    celularCorp: "+591 61557160",
+    pos: [{ nombre: "http://10.164.0.7/pos", url: "http://10.164.0.7/pos" }],
+    zona: "Oeste",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(255,107,53,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MF",
+    nombre: "Amarket Barrio Brígida",
+    latitud: -17.753979,
+    longitud: -63.195892,
+    cargoLider: "Líder de tienda",
+    lider: "Jose Leonardo Villarubia Arteaga",
+    celularCorp: "+591 61553326",
+    pos: [{ nombre: "http://10.79.0.8/pos", url: "http://10.79.0.8/pos" }],
+    zona: "Noroeste",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(255,107,53,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MG",
+    nombre: "Amarket Banzer Km 8 1/2",
+    latitud: -17.700291,
+    longitud: -63.160149,
+    cargoLider: "Líder de tienda",
+    lider: "Por definir",
+    celularCorp: "+591 74169627",
+    pos: [{ nombre: "http://10.254.0.7/pos", url: "http://10.254.0.7/pos" }],
+    zona: "Norte",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(255,107,53,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MH",
+    nombre: "Amarket Virgen de Cotoca Casi 5to Anillo",
+    latitud: -17.7776089,
+    longitud: -63.1423572,
+    cargoLider: "Líder de tienda",
+    lider: "Por definir",
+    celularCorp: "+591 61558289",
+    pos: [{ nombre: "http://10.34.0.7/pos", url: "http://10.34.0.7/pos" }],
+    zona: "Este",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(255,107,53,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MI",
+    nombre: "Amarket Paragua 2do Anillo",
+    latitud: -17.774306,
+    longitud: -63.165453,
+    cargoLider: "Líder de tienda",
+    lider: "Por Definir",
+    celularCorp: "+591 78522672",
+    pos: [{ nombre: "http://10.71.0.6/pos", url: "http://10.71.0.6/pos" }],
+    zona: "Este",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(168,85,247,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MJ",
+    nombre: "Amarket Héroes del Chaco",
+    latitud: -17.800635,
+    longitud: -63.150466,
+    cargoLider: "Líder de tienda",
+    lider: "Camila Pilar Valdez",
+    celularCorp: "+591 78514375",
+    pos: [{ nombre: "http://10.162.0.6/pos", url: "http://10.162.0.6/pos" }],
+    zona: "Sureste",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(168,85,247,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MK",
+    nombre: "Amarket Monseñor Rivero",
+    latitud: -17.773581,
+    longitud: -63.182041,
+    cargoLider: "Líder de tienda",
+    lider: "Jose Leonardo Villarubia Arteaga",
+    celularCorp: "+591 78500242",
+    pos: [{ nombre: "http://10.109.0.6/pos", url: "http://10.109.0.6/pos" }],
+    zona: "Norte",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(0,229,160,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MN",
+    nombre: "Amarket Beni 6to Anillo",
+    latitud: -17.7348591,
+    longitud: -63.1606251,
+    cargoLider: "Líder de tienda",
+    lider: "Por definir",
+    celularCorp: "+591 78500212",
+    pos: [{ nombre: "http://10.189.0.6/pos", url: "http://10.189.0.6/pos" }],
+    zona: "Norte",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(168,85,247,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MO",
+    nombre: "Amarket Remanso",
+    latitud: -17.7152,
+    longitud: -63.1662,
+    cargoLider: "Líder de tienda",
+    lider: "Por Definir",
+    celularCorp: "+591 77644157",
+    pos: [{ nombre: "http://10.192.0.6/pos", url: "http://10.192.0.6/pos" }],
+    zona: "Norte",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(255,107,53,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MP",
+    nombre: "Amarket Bella Vista",
+    latitud: -17.766911,
+    longitud: -63.109959,
+    cargoLider: "Líder de tienda",
+    lider: "Por Definir",
+    celularCorp: "+591 77316647",
+    pos: [{ nombre: "http://10.118.0.6/pos", url: "http://10.118.0.6/pos" }],
+    zona: "Este",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(255,107,53,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MQ",
+    nombre: "Amarket Sevilla",
+    latitud: -17.695901,
+    longitud: -63.156585,
+    cargoLider: "Líder de tienda",
+    lider: "Yanahina Cuñanchiro Vega",
+    celularCorp: "+591 61588055",
+    pos: [{ nombre: "http://10.228.0.6/pos", url: "http://10.228.0.6/pos" }],
+    zona: "Norte",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(255,107,53,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MR",
+    nombre: "Amarket Macororó",
+    latitud: -17.76275,
+    longitud: -63.17889,
+    cargoLider: "Líder de tienda",
+    lider: "David Muruchi Cari",
+    celularCorp: "+591 75395297",
+    pos: [{ nombre: "http://10.255.16.6/pos", url: "http://10.255.16.6/pos" }],
+    zona: "Centro",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(255,107,53,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MS",
+    nombre: "Amarket Bánzer 4to y 5to Anillo",
+    latitud: -17.744856,
+    longitud: -63.1737724,
+    cargoLider: "Líder de tienda",
+    lider: "Aidee Mamani Herrera",
+    celularCorp: "+591 69063937",
+    pos: [{ nombre: "http://10.255.80.6/pos", url: "http://10.255.80.6/pos" }],
+    zona: "Noreste",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(255,107,53,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MU",
+    nombre: "Amarket Piraí 5to y 6to Anillo",
+    latitud: -17.807287561744374,
+    longitud: -63.22764043032451,
+    cargoLider: "Líder de tienda",
+    lider: "Lucy Erika Medina Saldaña",
+    celularCorp: "+591 62239490",
+    pos: [{ nombre: "http://10.255.128.6/pos", url: "http://10.255.128.6/pos" }],
+    zona: "Suroeste",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(255,107,53,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MV",
+    nombre: "Amarket Sirari",
+    latitud: -17.765139216343673,
+    longitud: -63.20485157420804,
+    cargoLider: "Líder de tienda",
+    lider: "Mariely Espinoza Salvatierra",
+    celularCorp: "+591 69094018",
+    pos: [{ nombre: "http://10.255.176.6/pos", url: "http://10.255.176.6/pos" }],
+    zona: "Oeste",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(255,107,53,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MW",
+    nombre: "Amarket Velarde",
+    latitud: -17.796279315342336,
+    longitud: -63.18056731165395,
+    cargoLider: "Líder de tienda",
+    lider: "María Elena Suárez",
+    celularCorp: "+591 72200002",
+    pos: ["POS-01", "POS-02"],
+    zona: "Oeste",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(79,138,255,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  {
+    keyBodega: "B1MX",
+    nombre: "Amarket Paragua 4to Anillo",
+    latitud: -17.764529,
+    longitud: -63.149451,
+    cargoLider: "Líder de tienda",
+    lider: "Lider Candia Valverde",
+    celularCorp: "+591 79860809",
+    pos: [{ nombre: "http://10.252.80.6/pos", url: "http://10.252.80.6/pos" }],
+    zona: "Este",
+    horario: "24 Horas",
+    turno: "24h",
+    grupo: "Amarket",
+    color: "#ffc72c",
+    colorDark: "rgba(79,138,255,0.18)",
+    hasPolygon: false,
+    polygon: null
+  },
+  // =============================================
+  // FARMACORP
+  // =============================================
+  {
+  keyBodega: "B1PA",
+  nombre: "Proxi Escuadrón Velasco",
+  latitud: -17.809528,
+  longitud: -63.20161,
+  cargoLider: "Regente",
+  lider: "Por definir",
+  celularCorp: "+591 6XXXXXXX",
+  pos: [{ nombre: "http://10.196.0.5/pos", url: "http://10.196.0.5/pos" }],
+  zona: "Sur",
+  horario: "7:00 - 23:00",
+  turno: "dia",
+  grupo: "Farmacorp",
+  color: "#6366f1",
+  colorDark: "rgba(249,115,22,0.18)",
+  hasPolygon: false,
+  polygon: null
+},
+{
+  keyBodega: "B1PB",
+  nombre: "Proxi Canal Isuto",
+  latitud: -17.756799,
+  longitud: -63.191647,
+  cargoLider: "Regente",
+  lider: "Por Definir",
+  celularCorp: "+591 6XXXXXXX",
+  pos: [{ nombre: "http://10.195.0.5/pos", url: "http://10.195.0.5/pos" }],
+  zona: "Norte",
+  horario: "24 Horas",
+  turno: "ambos", // ← nuevo valor: tiene cobertura día Y noche
+  grupo: "Farmacorp",
+  color: "#6366f1",
+  colorDark: "rgba(99,102,241,0.18)",
+  hasPolygon: false,
+  polygon: null,
+  polygonNoche: null     // ← segundo polígono para la noche
+},
+{
+  keyBodega: "B207",
+  nombre: "CB - Sucursal El Prado I",
+  latitud: -17.3857731,
+  longitud: -66.1579149,
+  cargoLider: "Regente",
+  lider: "Por Definir",
+  celularCorp: "+591 6XXXXXXX",
+  pos: [{ nombre: "http://10.121.0.5/pos", url: "http://10.121.0.5/pos" }],
+  zona: "Centro",
+  horario: "24 Horas",
+  turno: "ambos", // ← nuevo valor: tiene cobertura día Y noche
+  grupo: "Farmacorp",
+  color: "#6366f1",
+  colorDark: "rgba(99,102,241,0.18)",
+  hasPolygon: false,
+  polygon: null,
+  polygonNoche: null
+},
+{
+  keyBodega: "B209",
+  nombre: "CB - Sucursal Blanco Galindo",
+  latitud: -17.3914211,
+  longitud: -66.2195447,
+  cargoLider: "Regente",
+  lider: "Por definir",
+  celularCorp: "+591 6XXXXXXX",
+  pos: [{ nombre: "http://10.123.0.5/pos", url: "http://10.123.0.5/pos" }],
+  zona: "Oeste",
+  horario: "24 Horas",
+  turno: "ambos", // ← nuevo valor: tiene cobertura día Y noche
+  grupo: "Farmacorp",
+  color: "#6366f1",
+  colorDark: "rgba(249,115,22,0.18)",
+  hasPolygon: false,
+  polygon: null,
+  polygonNoche: null
+},
+{
+  keyBodega: "B211",
+  nombre: "CB - Sucursal Simón López",
+  latitud: -17.3639369,
+  longitud: -66.1792655,
+  cargoLider: "Regente",
+  lider: "Por definir",
+  celularCorp: "+591 6XXXXXXX",
+  pos: [{ nombre: "http://10.48.0.5/pos", url: "http://10.48.0.5/pos" }],
+  zona: "Centro",
+  horario: "24 Horas",
+  turno: "ambos", // ← nuevo valor: tiene cobertura día Y noche
+  grupo: "Farmacorp",
+  color: "#6366f1",
+  colorDark: "rgba(249,115,22,0.18)",
+  hasPolygon: false,
+  polygon: null,
+  polygonNoche: null
+},
+{
+  keyBodega: "B225",
+  nombre: "CB - Sucursal Pacata Alta",
+  latitud: -17.373376,
+  longitud: -66.123169,
+  cargoLider: "Regente",
+  lider: "Por definir",
+  celularCorp: "+591 6XXXXXXX",
+  pos: [{ nombre: "http://10.242.0.5/pos", url: "http://10.242.0.5/pos" }],
+  zona: "Centro",
+  horario: "07:00 - 23:00",
+  turno: "dia",
+  grupo: "Farmacorp",
+  color: "#6366f1",
+  colorDark: "rgba(249,115,22,0.18)",
+  hasPolygon: false,
+  polygon: null,
+},
+{
+  keyBodega: "B301",
+  nombre: "LP - Sucursal San Miguel",
+  latitud: -16.5397917,
+  longitud: -68.0780649,
+  cargoLider: "Regente",
+  lider: "Por Definir",
+  celularCorp: "+591 6XXXXXXX",
+  pos: [{ nombre: "http://10.61.0.5/pos", url: "http://10.61.0.5/pos" }],
+  zona: "Este",
+  horario: "23:00 - 7:00",
+  turno: "noche", // ← nuevo valor: tiene cobertura día Y noche
+  grupo: "Farmacorp",
+  color: "#6366f1",
+  colorDark: "rgba(99,102,241,0.18)",
+  hasPolygon: false,
+  polygon: null
+},
+{
+  keyBodega: "B303",
+  nombre: "LP - Sucursal Avaroa",
+  latitud: -16.5113988,
+  longitud: -68.1268032,
+  cargoLider: "Regente",
+  lider: "Por definir",
+  celularCorp: "+591 6XXXXXXX",
+  pos: [{ nombre: "http://10.62.0.5/pos", url: "http://10.62.0.5/pos" }],
+  zona: "Centro",
+  horario: "7:00 - 23:00",
+  turno: "dia",
+  grupo: "Farmacorp",
+  color: "#6366f1",
+  colorDark: "rgba(249,115,22,0.18)",
+  hasPolygon: false,
+  polygon: null
+},
+{
+  keyBodega: "B311",
+  nombre: "LP - Sucursal Saavedra",
+  latitud: -16.502733,
+  longitud: -68.122218,
+  cargoLider: "Regente",
+  lider: "Por definir",
+  celularCorp: "+591 6XXXXXXX",
+  pos: [{ nombre: "http://10.142.0.5/pos", url: "http://10.142.0.5/pos" }],
+  zona: "Centro",
+  horario: "23:00 - 7:00",
+  turno: "noche",
+  grupo: "Farmacorp",
+  color: "#6366f1",
+  colorDark: "rgba(249,115,22,0.18)",
+  hasPolygon: false,
+  polygon: null
+},
+{
+  keyBodega: "B330",
+  nombre: "LP - Sucursal Calacoto",
+  latitud: -16.545222,
+  longitud: -68.076729,
+  cargoLider: "Regente",
+  lider: "Por definir",
+  celularCorp: "+591 6XXXXXXX",
+  pos: [{ nombre: "http://10.64.0.5/pos", url: "http://10.64.0.5/pos" }],
+  zona: "Sur",
+  horario: "7:00 - 23:00",
+  turno: "dia",
+  grupo: "Farmacorp",
+  color: "#6366f1",
+  colorDark: "rgba(249,115,22,0.18)",
+  hasPolygon: false,
+  polygon: null
+},
+// =============================================
+  // PIZZA HUT
+  // =============================================
+{
+  keyBodega: "PH01",
+  nombre: "Pizza Hut Sucursal Banzer km 8.5",
+  latitud: -17.7000625,
+  longitud: -63.1600625,
+  lider: "Erma Daniela Cervantes",
+  celularCorp: "+591 61553486",
+  pos: [],
+  zona: "Norte",
+  horario: "Lun-Jue 11:00–23:59 · Vie-Dom 11:00–01:00",
+  color: "#dc2626",
+  colorDark: "rgba(220,38,38,0.18)",
+  grupo: "Pizza Hut",
+  turno: "24h",
+  hasPolygon: false,
+  polygon: null
+},
+{
+  keyBodega: "PH03",
+  nombre: "Pizza Hut Sucursal Banzer 3er anillo",
+  latitud: -17.75884,
+  longitud: -63.17872,
+  lider: "Carlos Arturo Suarez",
+  celularCorp: "+591 62238074",
+  pos: [],
+  zona: "Norte",
+  horario: "Lun-Jue 11:00–23:59 · Vie-Dom 11:00–01:00",
+  color: "#dc2626",
+  colorDark: "rgba(220,38,38,0.18)",
+  grupo: "Pizza Hut",
+  turno: "24h",
+  hasPolygon: false,
+  polygon: null
+},
+{
+  keyBodega: "PH04",
+  nombre: "Pizza Hut Sucursal San Martin",
+  latitud: -17.7590625,
+  longitud: -63.1993125,
+  lider: "Brian Jhoel Mendoza",
+  celularCorp: "+591 62238072",
+  pos: [],
+  zona: "Norte",
+  horario: "Lun-Jue 11:00–23:59 · Vie-Dom 11:00–01:00",
+  color: "#dc2626",
+  colorDark: "rgba(220,38,38,0.18)",
+  grupo: "Pizza Hut",
+  turno: "24h",
+  hasPolygon: false,
+  polygon: null
+}
+  // ┌─────────────────────────────────────────────┐
+  // │  PARA AÑADIR MÁS TIENDAS:                   │
+  // │  Copia el bloque de arriba y cambia:         │
+  // │  - keyBodega: código único ej "B1ME"         │
+  // │  - nombre: nombre completo                   │
+  // │  - latitud / longitud: coords de la tienda   │
+  // │  - lider / celularCorp / pos / zona          │
+  // │  - color: un color hex único por tienda      │
+  // │  Luego sube el JSON del polígono más abajo   │
+  // └─────────────────────────────────────────────┘
+];
+ 
+// =============================================
+// POLÍGONOS — Se cargan desde los JSON subidos
+// =============================================
+const POLYGONS_RAW = {
+  // --- AMARKET ---
+  "B1MA":{"version":"1.0","exportDate":"2026-05-11T17:51:30.601Z","sucursal":{"keyBodega":"B1MA","latitud":-17.799458,"longitud":-63.220915},"polygon":[{"lat":-17.78995947796119,"lng":-63.20490762591363},{"lat":-17.79000800307465,"lng":-63.20490762591363},{"lat":-17.791716589452637,"lng":-63.20470109581949},{"lat":-17.79299993393902,"lng":-63.2045428454876},{"lat":-17.79428837698388,"lng":-63.20415124297143},{"lat":-17.799463763616753,"lng":-63.20220261812211},{"lat":-17.800901557197864,"lng":-63.20144087076188},{"lat":-17.802357215629335,"lng":-63.20049673318863},{"lat":-17.803906074235773,"lng":-63.19927096366883},{"lat":-17.8162721999671,"lng":-63.21324527263642},{"lat":-17.81500051404982,"lng":-63.214393258094795},{"lat":-17.811931066096417,"lng":-63.21966648101807},{"lat":-17.808182284286133,"lng":-63.22293877601624},{"lat":-17.803575362768637,"lng":-63.226624131202705},{"lat":-17.802875631466176,"lng":-63.227139115333564},{"lat":-17.80199713280698,"lng":-63.22696745395661},{"lat":-17.79359244012146,"lng":-63.226188272237785}],"metadata":{"pointCount":17}},
+  "B1MB":{"version":"1.0","exportDate":"2026-05-11T17:46:25.367Z","sucursal":{"keyBodega":"B1MB","latitud":-17.820562,"longitud":-63.184182},"polygon":[{"lat":-17.803908627989905,"lng":-63.19927096366883},{"lat":-17.817658786925016,"lng":-63.21480631828309},{"lat":-17.841195922653444,"lng":-63.21215361356736},{"lat":-17.85006303427884,"lng":-63.21474194526673},{"lat":-17.85345733855342,"lng":-63.21658864617349},{"lat":-17.87265391607784,"lng":-63.19238305091858},{"lat":-17.857851072873846,"lng":-63.17612081766129},{"lat":-17.83435826862058,"lng":-63.15312087535858},{"lat":-17.816094726272254,"lng":-63.16680952906609},{"lat":-17.813287043379578,"lng":-63.162953853607185},{"lat":-17.8110066462941,"lng":-63.15983578562737},{"lat":-17.810558479720484,"lng":-63.161593973636634},{"lat":-17.809754075353315,"lng":-63.16225111484528},{"lat":-17.80446406864196,"lng":-63.16540941596032},{"lat":-17.80517656239485,"lng":-63.166598975658424},{"lat":-17.807414897912686,"lng":-63.17187622189523},{"lat":-17.807495339567627,"lng":-63.171923160552986},{"lat":-17.807591103395257,"lng":-63.172038495540626},{"lat":-17.807983096127074,"lng":-63.17260712385178},{"lat":-17.810083498532823,"lng":-63.17636758089066},{"lat":-17.810720636986844,"lng":-63.177700638771064},{"lat":-17.81155823437705,"lng":-63.17962512373926},{"lat":-17.812134080300776,"lng":-63.181203603744514},{"lat":-17.812303897036323,"lng":-63.18165823817254},{"lat":-17.812721415691037,"lng":-63.183262199163444},{"lat":-17.81279930132576,"lng":-63.18416073918343},{"lat":-17.812806962206047,"lng":-63.18493455648423},{"lat":-17.812744398340882,"lng":-63.185499161481864},{"lat":-17.812651190909243,"lng":-63.186039626598365},{"lat":-17.812191537109097,"lng":-63.1872881948948},{"lat":-17.810485700427016,"lng":-63.191284686326995},{"lat":-17.810354186891594,"lng":-63.19157838821412},{"lat":-17.810109035188,"lng":-63.19207593798638},{"lat":-17.80973364598882,"lng":-63.19283902645112},{"lat":-17.80958170251691,"lng":-63.19314748048783},{"lat":-17.809014786235515,"lng":-63.194180130958564},{"lat":-17.80880283058643,"lng":-63.19456100463868},{"lat":-17.808103119788015,"lng":-63.19557219743729},{"lat":-17.807960112863647,"lng":-63.195776045322425},{"lat":-17.80755152101941,"lng":-63.196280300617225}],"metadata":{"pointCount":40}},
+  "B1MC":{"version":"1.0","exportDate":"2026-05-11T13:14:59.355Z","sucursal":{"keyBodega":"B1MC","latitud":-17.759683,"longitud":-63.166675},"polygon":[{"lat":-17.749990741354804,"lng":-63.1752933561802},{"lat":-17.750794137579906,"lng":-63.16920474171639},{"lat":-17.751200304728272,"lng":-63.16635489463807},{"lat":-17.751734195992892,"lng":-63.163973093032844},{"lat":-17.7522961850772,"lng":-63.16218942403794},{"lat":-17.75361812971523,"lng":-63.15934360027314},{"lat":-17.75428356868341,"lng":-63.158217072486885},{"lat":-17.754799569558056,"lng":-63.1573359668255},{"lat":-17.756550640641294,"lng":-63.15502390265466},{"lat":-17.76353815043443,"lng":-63.159812986850746},{"lat":-17.764673547100053,"lng":-63.1608670949936},{"lat":-17.764319774108937,"lng":-63.1612640619278},{"lat":-17.763755268464465,"lng":-63.16195338964463},{"lat":-17.762679893053164,"lng":-63.16350102424622},{"lat":-17.762028534255993,"lng":-63.164674490690246},{"lat":-17.761457635477267,"lng":-63.16590294241906},{"lat":-17.760879071768688,"lng":-63.16750422120096},{"lat":-17.76050741065084,"lng":-63.1686843931675},{"lat":-17.760234092360076,"lng":-63.16970899701119},{"lat":-17.759981208709757,"lng":-63.1710085272789},{"lat":-17.759778135216628,"lng":-63.17221552133561},{"lat":-17.75961593169485,"lng":-63.17365318536759},{"lat":-17.759483103504504,"lng":-63.17586332559586},{"lat":-17.75949332106111,"lng":-63.17747801542283},{"lat":-17.759595496595058,"lng":-63.17906185984612}],"metadata":{"pointCount":25}},
+  "B1MD":{"version":"1.0","exportDate":"2026-05-11T15:39:17.813Z","sucursal":{"keyBodega":"B1MD","latitud":-17.719367,"longitud":-63.162624},"polygon":[{"lat":-17.724968700861297,"lng":-63.16562667489053},{"lat":-17.72826702265538,"lng":-63.1570503115654},{"lat":-17.71981032071009,"lng":-63.15297201275826},{"lat":-17.722880072989817,"lng":-63.14493477344514},{"lat":-17.727666635522798,"lng":-63.13564896583558},{"lat":-17.73010393930668,"lng":-63.129879534244544},{"lat":-17.717427809248917,"lng":-63.12040463089944},{"lat":-17.7139977036522,"lng":-63.12705248594285},{"lat":-17.711309783633297,"lng":-63.125652372837074},{"lat":-17.71069528675646,"lng":-63.12560543417931},{"lat":-17.708419969186433,"lng":-63.13503339886667},{"lat":-17.708818567049644,"lng":-63.16000610589982},{"lat":-17.71079365749986,"lng":-63.16024482250214},{"lat":-17.712165732116187,"lng":-63.16054522991181},{"lat":-17.716324050583655,"lng":-63.162082135677345}],"metadata":{"pointCount":15}},
+  "B1ME":{"version":"1.0","exportDate":"2026-05-11T16:53:19.281Z","sucursal":{"keyBodega":"B1ME","latitud":-17.760272,"longitud":-63.198576},"polygon":[{"lat":-17.761478070364333,"lng":-63.20269480347634},{"lat":-17.772724567033585,"lng":-63.1908005475998},{"lat":-17.77289442125819,"lng":-63.190666437149055},{"lat":-17.772787144924585,"lng":-63.19050148129464},{"lat":-17.77224054546315,"lng":-63.18936154246331},{"lat":-17.771914883774496,"lng":-63.18824708461762},{"lat":-17.771600715465524,"lng":-63.18833693861962},{"lat":-17.769682488853967,"lng":-63.18966060876847},{"lat":-17.768669728419596,"lng":-63.190230578184135},{"lat":-17.768052874044947,"lng":-63.19046795368195},{"lat":-17.76738876343657,"lng":-63.19066777825356},{"lat":-17.766180586658283,"lng":-63.19086223840714},{"lat":-17.76219967581676,"lng":-63.19110229611398},{"lat":-17.754255469583157,"lng":-63.20009708404542},{"lat":-17.73530034423747,"lng":-63.205375671386726},{"lat":-17.717871099300908,"lng":-63.20626080036164},{"lat":-17.71813681730828,"lng":-63.21707010269166},{"lat":-17.72770240332319,"lng":-63.2353748381138},{"lat":-17.739714870720945,"lng":-63.2362586259842},{"lat":-17.747519221614485,"lng":-63.23291659355164},{"lat":-17.754418955195497,"lng":-63.249720633029945},{"lat":-17.769934081666182,"lng":-63.24972331523896},{"lat":-17.773972289417685,"lng":-63.21999371051789},{"lat":-17.776407685600066,"lng":-63.22036251425744},{"lat":-17.775880253374368,"lng":-63.215609639883056},{"lat":-17.7703478680594,"lng":-63.2099461555481},{"lat":-17.768853634902065,"lng":-63.20848166942597},{"lat":-17.76531467904062,"lng":-63.20512086153031}],"metadata":{"pointCount":28}},
+  "B1MF":{"version":"1.0","exportDate":"2026-05-11T16:57:22.772Z","sucursal":{"keyBodega":"B1MF","latitud":-17.753979,"longitud":-63.195892},"polygon":[{"lat":-17.754252915119277,"lng":-63.20009574294092},{"lat":-17.76219584429108,"lng":-63.19110229611398},{"lat":-17.76089056643012,"lng":-63.18734854459763},{"lat":-17.760384800628124,"lng":-63.1852175295353},{"lat":-17.759921180720067,"lng":-63.182957768440254},{"lat":-17.75959421940125,"lng":-63.179065883159645},{"lat":-17.749986909567685,"lng":-63.1752933561802},{"lat":-17.749640771124444,"lng":-63.180767744779594},{"lat":-17.749794042842403,"lng":-63.18315893411637},{"lat":-17.737993013957972,"lng":-63.186559975147254},{"lat":-17.725355765005162,"lng":-63.18715944886208},{"lat":-17.71740609184068,"lng":-63.18716481328011},{"lat":-17.717873654283625,"lng":-63.20625543594361},{"lat":-17.735292680034373,"lng":-63.20537298917771}],"metadata":{"pointCount":14}},
+  "B1MG":{"version":"1.0","exportDate":"2026-05-11T15:57:57.939Z","sucursal":{"keyBodega":"B1MG","latitud":-17.700291,"longitud":-63.160149},"polygon":[{"lat":-17.70917372722027,"lng":-63.182196021080024},{"lat":-17.696637936401892,"lng":-63.183209896087654},{"lat":-17.674716086032124,"lng":-63.182599693536766},{"lat":-17.675503208131502,"lng":-63.15873876214028},{"lat":-17.69616776333524,"lng":-63.15952062606812},{"lat":-17.701559347980393,"lng":-63.129748106002815},{"lat":-17.707906389864995,"lng":-63.12539756298066},{"lat":-17.710687621501464,"lng":-63.12560811638833},{"lat":-17.708417414069064,"lng":-63.135030716657646}],"metadata":{"pointCount":9}},
+  "B1MH":{"version":"1.0","exportDate":"2026-05-08T20:16:04.877Z","sucursal":{"keyBodega":"B1MH","latitud":-17.7776089,"longitud":-63.1423572},"polygon":[{"lat":-17.774184286418702,"lng":-63.15390273928643},{"lat":-17.773852242811614,"lng":-63.152723908424385},{"lat":-17.77130825747844,"lng":-63.1471610069275},{"lat":-17.758669528686575,"lng":-63.12965154647828},{"lat":-17.770434711995637,"lng":-63.123021125793464},{"lat":-17.77411532356644,"lng":-63.12094509601594},{"lat":-17.78101147706331,"lng":-63.11855524778367},{"lat":-17.785684108309994,"lng":-63.11786592006684},{"lat":-17.7863519819394,"lng":-63.117769360542304},{"lat":-17.79255810692824,"lng":-63.118099272251136},{"lat":-17.792249082762233,"lng":-63.12680304050446},{"lat":-17.791559522777437,"lng":-63.135327100753784},{"lat":-17.79100787287214,"lng":-63.140965104103095},{"lat":-17.79044855942255,"lng":-63.14168930053712},{"lat":-17.790088452575823,"lng":-63.14244836568833},{"lat":-17.789899460039443,"lng":-63.14317524433136},{"lat":-17.789817733475275,"lng":-63.14371436834336},{"lat":-17.789983740519574,"lng":-63.14450293779374},{"lat":-17.790034819579077,"lng":-63.144815415143974},{"lat":-17.790009280051144,"lng":-63.14513862133027},{"lat":-17.789891798175645,"lng":-63.14549401402474},{"lat":-17.789692589601383,"lng":-63.14591109752656},{"lat":-17.789618524818394,"lng":-63.146279901266105},{"lat":-17.78959681616928,"lng":-63.14650386571885},{"lat":-17.789563614700818,"lng":-63.14700812101365},{"lat":-17.789566168660148,"lng":-63.147477507591255},{"lat":-17.789594262210382,"lng":-63.147760480642326},{"lat":-17.78958787731299,"lng":-63.147875815629966},{"lat":-17.789535521145762,"lng":-63.1479898095131},{"lat":-17.789423146881344,"lng":-63.14807295799256},{"lat":-17.788903414988546,"lng":-63.14806625247003},{"lat":-17.78574668166238,"lng":-63.14779937267304},{"lat":-17.785626642967074,"lng":-63.15316647291184},{"lat":-17.7810165852265,"lng":-63.15306723117829},{"lat":-17.778444606578436,"lng":-63.15318390727044},{"lat":-17.776871262760032,"lng":-63.15335020422936}],"metadata":{"pointCount":36}},
+  "B1MI":{"version":"1.0","exportDate":"2026-05-11T15:52:45.774Z","sucursal":{"keyBodega":"B1MI","latitud":-17.774306,"longitud":-63.165453},"polygon":[{"lat":-17.771554739569126,"lng":-63.1680889427662},{"lat":-17.776131837463108,"lng":-63.174028694629676},{"lat":-17.776546886581585,"lng":-63.17364513874055},{"lat":-17.777090918735492,"lng":-63.17335546016694},{"lat":-17.777558325319628,"lng":-63.17316502332688},{"lat":-17.77811512500996,"lng":-63.17302823066712},{"lat":-17.77951222485134,"lng":-63.172722458839424},{"lat":-17.782923196940857,"lng":-63.172202110290534},{"lat":-17.788390066523547,"lng":-63.17138671875001},{"lat":-17.788867659421893,"lng":-63.17133843898774},{"lat":-17.789283955933065,"lng":-63.1714028120041},{"lat":-17.78982539534224,"lng":-63.17158520221711},{"lat":-17.79033873968102,"lng":-63.17192047834397},{"lat":-17.790864852248095,"lng":-63.17249715328217},{"lat":-17.801090538086033,"lng":-63.16123992204667},{"lat":-17.798581417415257,"lng":-63.15908744931222},{"lat":-17.79563554980645,"lng":-63.15713614225388},{"lat":-17.791348823361997,"lng":-63.154294341802604},{"lat":-17.785627919974893,"lng":-63.15316915512086},{"lat":-17.781017862267294,"lng":-63.153068572282805},{"lat":-17.77838713890674,"lng":-63.15318927168847},{"lat":-17.77686998568962,"lng":-63.15335154533387},{"lat":-17.77418300932909,"lng":-63.15390139818192},{"lat":-17.765625026943194,"lng":-63.1599846482277},{"lat":-17.764676101415134,"lng":-63.16086843609811},{"lat":-17.768203575724232,"lng":-63.1641434133053}],"metadata":{"pointCount":26}},
+  "B1MJ":{"version":"1.0","exportDate":"2026-05-11T14:33:49.936Z","sucursal":{"keyBodega":"B1MJ","latitud":-17.800635,"longitud":-63.150466},"polygon":[{"lat":-17.78562668183672,"lng":-63.15316780403325},{"lat":-17.785747836155817,"lng":-63.14780083981424},{"lat":-17.788895753082013,"lng":-63.14806759357453},{"lat":-17.78941931593926,"lng":-63.148075640201576},{"lat":-17.789535521145762,"lng":-63.14799115061761},{"lat":-17.78958787731299,"lng":-63.147875815629966},{"lat":-17.789594262210382,"lng":-63.14776316285134},{"lat":-17.78956744563981,"lng":-63.14747348427774},{"lat":-17.789564891680484,"lng":-63.147005438804634},{"lat":-17.789619801797667,"lng":-63.14628124237061},{"lat":-17.789692589601383,"lng":-63.14591109752656},{"lat":-17.78989435213028,"lng":-63.14549401402474},{"lat":-17.790009280051144,"lng":-63.14514130353928},{"lat":-17.790034819579077,"lng":-63.14481139183045},{"lat":-17.789985017496235,"lng":-63.14450293779374},{"lat":-17.78981901045312,"lng":-63.14371302723885},{"lat":-17.789902013993963,"lng":-63.14316853880884},{"lat":-17.79009100652766,"lng":-63.142447024583824},{"lat":-17.79044983639589,"lng":-63.14169064164163},{"lat":-17.79100914984147,"lng":-63.140965104103095},{"lat":-17.791512275051353,"lng":-63.13582062721253},{"lat":-17.79225163668314,"lng":-63.12681645154954},{"lat":-17.792560660844746,"lng":-63.118152916431434},{"lat":-17.792927147483564,"lng":-63.10874909162522},{"lat":-17.797788451332917,"lng":-63.10883089900018},{"lat":-17.80299565856341,"lng":-63.10918629169465},{"lat":-17.802724959038322,"lng":-63.11670452356339},{"lat":-17.804346596280425,"lng":-63.11791419982911},{"lat":-17.80860619680725,"lng":-63.118777871131904},{"lat":-17.813150424666553,"lng":-63.11868131160737},{"lat":-17.814012269935315,"lng":-63.109911829233184},{"lat":-17.82175464563381,"lng":-63.12485709786416},{"lat":-17.82789187367582,"lng":-63.121476173400886},{"lat":-17.82918389474811,"lng":-63.1237117946148},{"lat":-17.831946643542768,"lng":-63.12155663967133},{"lat":-17.833576951631443,"lng":-63.12211453914643},{"lat":-17.834303372277414,"lng":-63.122960776090636},{"lat":-17.837723509805578,"lng":-63.12404572963715},{"lat":-17.835246821030616,"lng":-63.13062250614167},{"lat":-17.831935153456296,"lng":-63.13602983951569},{"lat":-17.823779558467404,"lng":-63.146468997001655},{"lat":-17.81901216710928,"lng":-63.15256699919701},{"lat":-17.8110066462941,"lng":-63.15983042120934},{"lat":-17.810557202891033,"lng":-63.16159129142762},{"lat":-17.809750244847653,"lng":-63.16225111484528},{"lat":-17.80446151489579,"lng":-63.16540807485581},{"lat":-17.804058022542172,"lng":-63.16481530666351},{"lat":-17.80335573937064,"lng":-63.163830935955055},{"lat":-17.80231380142688,"lng":-63.16253006458283},{"lat":-17.801815814231286,"lng":-63.16197484731675},{"lat":-17.801371455252628,"lng":-63.16150546073914},{"lat":-17.801090538086033,"lng":-63.161237239837654},{"lat":-17.80067937670851,"lng":-63.16088050603867},{"lat":-17.7987793391569,"lng":-63.15924972295762},{"lat":-17.798575032839278,"lng":-63.159078061580665},{"lat":-17.7913501003289,"lng":-63.1542930006981}],"metadata":{"pointCount":56}},
+  "B1MK":{"version":"1.0","exportDate":"2026-05-11T16:30:43.222Z","sucursal":{"keyBodega":"B1MK","latitud":-17.773581,"longitud":-63.182041},"polygon":[{"lat":-17.784765937618563,"lng":-63.19505989551545},{"lat":-17.784283225681996,"lng":-63.18892031908036},{"lat":-17.784030376051756,"lng":-63.185771405696876},{"lat":-17.783823498815337,"lng":-63.18260371685029},{"lat":-17.78359108089358,"lng":-63.17935019731522},{"lat":-17.783436561118915,"lng":-63.177217841148384},{"lat":-17.783202865668557,"lng":-63.1745731830597},{"lat":-17.782924473968013,"lng":-63.17220479249955},{"lat":-17.779507116645124,"lng":-63.17272514104844},{"lat":-17.778120233255976,"lng":-63.17302957177163},{"lat":-17.777560879450604,"lng":-63.173166364431395},{"lat":-17.777092195804325,"lng":-63.173356801271446},{"lat":-17.776544332436117,"lng":-63.17364916205407},{"lat":-17.776131837463108,"lng":-63.174030035734184},{"lat":-17.771553462460727,"lng":-63.16809162497521},{"lat":-17.771098811289736,"lng":-63.168767541646965},{"lat":-17.770602014165657,"lng":-63.17001745104791},{"lat":-17.770273795256923,"lng":-63.171224445104606},{"lat":-17.77046919413509,"lng":-63.18248569965363},{"lat":-17.770927678246064,"lng":-63.18475082516671},{"lat":-17.771914883774496,"lng":-63.18824440240861},{"lat":-17.77224437677359,"lng":-63.18936690688134},{"lat":-17.772792253322883,"lng":-63.190508186817176},{"lat":-17.773137069870504,"lng":-63.19103792309762},{"lat":-17.77349721088781,"lng":-63.191511332988746},{"lat":-17.773757737979913,"lng":-63.19171652197839},{"lat":-17.774628713050518,"lng":-63.19221004843713},{"lat":-17.775112728153847,"lng":-63.192425966262824},{"lat":-17.777701356598328,"lng":-63.19320112466813},{"lat":-17.78194371442894,"lng":-63.1944563984871},{"lat":-17.783766032873814,"lng":-63.194967359304435},{"lat":-17.78434835355909,"lng":-63.19503843784333}],"metadata":{"pointCount":32}},
+  "B1MN":{"version":"1.0","exportDate":"2026-05-11T15:27:28.564Z","sucursal":{"keyBodega":"B1MN","latitud":-17.7348591,"longitud":-63.1606251},"polygon":[{"lat":-17.733124974769964,"lng":-63.17751020193101},{"lat":-17.72668812792873,"lng":-63.17493528127671},{"lat":-17.72247511908168,"lng":-63.17333400249482},{"lat":-17.72497636550592,"lng":-63.16562667489053},{"lat":-17.72827468715895,"lng":-63.15704762935639},{"lat":-17.719811598187626,"lng":-63.152970671653755},{"lat":-17.722878795534125,"lng":-63.144940137863166},{"lat":-17.727669190365916,"lng":-63.13564628362656},{"lat":-17.7359569097507,"lng":-63.140645921230316},{"lat":-17.739357216375545,"lng":-63.14179122447968},{"lat":-17.740708635117095,"lng":-63.13809514045716},{"lat":-17.746571477345007,"lng":-63.12694519758225},{"lat":-17.756488057068548,"lng":-63.1330955028534},{"lat":-17.747496230572988,"lng":-63.148228526115425},{"lat":-17.745978815306025,"lng":-63.14726024866105},{"lat":-17.742891576364162,"lng":-63.15286204218865},{"lat":-17.73984771358161,"lng":-63.162690997123725}],"metadata":{"pointCount":17}},
+  "B1MO":{"version":"1.0","exportDate":"2026-05-11T15:34:22.696Z","sucursal":{"keyBodega":"B1MO","latitud":-17.7152,"longitud":-63.1662},"polygon":[{"lat":-17.724971255742883,"lng":-63.16562801599503},{"lat":-17.722472564164534,"lng":-63.17332863807679},{"lat":-17.726685573071617,"lng":-63.17493528127671},{"lat":-17.72646585522419,"lng":-63.17559778690339},{"lat":-17.726601262766664,"lng":-63.17744582891465},{"lat":-17.725354487567117,"lng":-63.18715542554856},{"lat":-17.71740609184068,"lng":-63.18716078996659},{"lat":-17.717268122362302,"lng":-63.18154558539392},{"lat":-17.709181392539946,"lng":-63.182196021080024},{"lat":-17.708816011937962,"lng":-63.16000878810883},{"lat":-17.71079365749986,"lng":-63.16024750471116},{"lat":-17.712168287180184,"lng":-63.16055059432984},{"lat":-17.71635087813177,"lng":-63.162092864513404}],"metadata":{"pointCount":13}},
+  "B1MP":{"version":"1.0","exportDate":"2026-05-11T16:22:58.775Z","sucursal":{"keyBodega":"B1MP","latitud":-17.766911,"longitud":-63.109959},"polygon":[{"lat":-17.75648933428454,"lng":-63.133092820644386},{"lat":-17.74657275463176,"lng":-63.126943856477745},{"lat":-17.747174355682027,"lng":-63.12579452991486},{"lat":-17.744866291396118,"lng":-63.124238848686225},{"lat":-17.740844031895907,"lng":-63.11376482248307},{"lat":-17.757655428678447,"lng":-63.10632973909379},{"lat":-17.75329243411675,"lng":-63.09821605682374},{"lat":-17.74766994059117,"lng":-63.08213084936143},{"lat":-17.75689932014585,"lng":-63.07815849781037},{"lat":-17.761681141927603,"lng":-63.08906167745591},{"lat":-17.765065634037917,"lng":-63.088012933731086},{"lat":-17.78050832227211,"lng":-63.082042336463935},{"lat":-17.79473658442594,"lng":-63.0835846066475},{"lat":-17.798437125942677,"lng":-63.0944448709488},{"lat":-17.797788451332917,"lng":-63.10882821679116},{"lat":-17.79292203966101,"lng":-63.108746409416206},{"lat":-17.792555553011706,"lng":-63.11809793114663},{"lat":-17.786348150931442,"lng":-63.1177680194378},{"lat":-17.7810165852265,"lng":-63.11855256557465},{"lat":-17.774116600656548,"lng":-63.12094241380692},{"lat":-17.770432157762833,"lng":-63.12301844358445},{"lat":-17.75866697428571,"lng":-63.12965288758279}],"metadata":{"pointCount":22}},
+  "B1MQ":{"version":"1.0","exportDate":"2026-05-11T16:07:59.483Z","sucursal":{"keyBodega":"B1MQ","latitud":-17.695901,"longitud":-63.156585},"polygon":[{"lat":-17.701558070372872,"lng":-63.129741400480285},{"lat":-17.69616265275167,"lng":-63.15951794385911},{"lat":-17.675499374753013,"lng":-63.158737421035774},{"lat":-17.6747109748384,"lng":-63.18259835243226},{"lat":-17.654199862566376,"lng":-63.18202435970307},{"lat":-17.644190725953095,"lng":-63.141008019447334},{"lat":-17.649300158100107,"lng":-63.13781619071961},{"lat":-17.65833524227293,"lng":-63.15204799175263},{"lat":-17.687015752757905,"lng":-63.133354336023345},{"lat":-17.697534839218118,"lng":-63.12335371971131}],"metadata":{"pointCount":10}},
+  "B1MR":{"version":"1.0","exportDate":"2026-05-11T13:42:34.456Z","sucursal":{"keyBodega":"B1MR","latitud":-17.76275,"longitud":-63.17889},"polygon":[{"lat":-17.76219967581676,"lng":-63.19110095500947},{"lat":-17.76136823281895,"lng":-63.18875804543496},{"lat":-17.760896952352823,"lng":-63.18735525012018},{"lat":-17.76040012688555,"lng":-63.18527922034264},{"lat":-17.759925012294485,"lng":-63.18295642733575},{"lat":-17.75959677378886,"lng":-63.17906185984612},{"lat":-17.759494598255642,"lng":-63.1774713099003},{"lat":-17.75948438069911,"lng":-63.175861984491355},{"lat":-17.759617208888503,"lng":-63.17364916205407},{"lat":-17.75997737713655,"lng":-63.171040713787086},{"lat":-17.760234092360076,"lng":-63.169717043638244},{"lat":-17.760512519399953,"lng":-63.168670982122435},{"lat":-17.760870131475958,"lng":-63.167528361082084},{"lat":-17.76146018983829,"lng":-63.165900260210044},{"lat":-17.762031088608847,"lng":-63.16467314958573},{"lat":-17.762677338709572,"lng":-63.16350907087327},{"lat":-17.76373611100182,"lng":-63.161982893943794},{"lat":-17.764329991389257,"lng":-63.16125601530076},{"lat":-17.7646748242576,"lng":-63.16086843609811},{"lat":-17.7682074071212,"lng":-63.16414877772333},{"lat":-17.771554739569126,"lng":-63.16808760166169},{"lat":-17.771096257066397,"lng":-63.16876620054246},{"lat":-17.77060073705044,"lng":-63.17001879215241},{"lat":-17.770271241021813,"lng":-63.171229809522636},{"lat":-17.77046791701894,"lng":-63.18248838186265},{"lat":-17.77092512402029,"lng":-63.18474411964417},{"lat":-17.771913606668665,"lng":-63.18824440240861},{"lat":-17.771600715465524,"lng":-63.18833559751511},{"lat":-17.769685043097486,"lng":-63.18965524435044},{"lat":-17.768672282677592,"lng":-63.19022789597513},{"lat":-17.768052874044947,"lng":-63.19046661257745},{"lat":-17.76738748629843,"lng":-63.190666437149055},{"lat":-17.76617675521787,"lng":-63.19085955619813}],"metadata":{"pointCount":33}},
+  "B1MS":{"version":"1.0","exportDate":"2026-05-11T15:03:05.485Z","sucursal":{"keyBodega":"B1MS","latitud":-17.744856,"longitud":-63.1737724},"polygon":[{"lat":-17.742892853677176,"lng":-63.152866065502174},{"lat":-17.747115600679145,"lng":-63.1552478671074},{"lat":-17.751693323990654,"lng":-63.158364593982704},{"lat":-17.753615575242254,"lng":-63.15934225916863},{"lat":-17.752297462323103,"lng":-63.1621827185154},{"lat":-17.751726532493194,"lng":-63.163983821868904},{"lat":-17.751192641205698,"lng":-63.166352212429054},{"lat":-17.750934635754366,"lng":-63.16824316978455},{"lat":-17.750789028553296,"lng":-63.16922217607499},{"lat":-17.74998435504288,"lng":-63.17528665065766},{"lat":-17.749639493859572,"lng":-63.1807690858841},{"lat":-17.74979276557863,"lng":-63.18315893411637},{"lat":-17.737985349870097,"lng":-63.18655729293824},{"lat":-17.725357042443196,"lng":-63.187158107757575},{"lat":-17.72660381762497,"lng":-63.177448511123664},{"lat":-17.72647096494463,"lng":-63.175595104694374},{"lat":-17.72668812792873,"lng":-63.174936622381225},{"lat":-17.733127529535285,"lng":-63.17751288414002},{"lat":-17.73985282292045,"lng":-63.162696361541755}],"metadata":{"pointCount":19}},
+  "B1MT": {"version":"1.0","exportDate":"2026-03-18T04:25:07.365Z","sucursal":{"keyBodega":"B1MT","latitud":-17.776979,"longitud":-63.215597},"polygon":[{"lat":-17.7768541391628,"lng":-63.2158041530919},{"lat":-17.7769869544488,"lng":-63.2158470684361},{"lat":-17.7770265436015,"lng":-63.2156016463112},{"lat":-17.776900113696,"lng":-63.2155721420121},{"lat":-17.7768541391628,"lng":-63.2158041530919}],"metadata":{"pointCount":5}},
+  "B1MU":{"version":"1.0","exportDate":"2026-05-11T18:17:09.433Z","sucursal":{"keyBodega":"B1MU","latitud":-17.807296,"longitud":-63.227853},"polygon":[{"lat":-17.802879462119467,"lng":-63.227139115333564},{"lat":-17.80329317219035,"lng":-63.22683468461038},{"lat":-17.805728168507315,"lng":-63.22490349411966},{"lat":-17.808161854741584,"lng":-63.22296291589738},{"lat":-17.811933619735655,"lng":-63.2196718454361},{"lat":-17.81500306764509,"lng":-63.214393258094795},{"lat":-17.81627475354415,"lng":-63.213246613740935},{"lat":-17.81765623336777,"lng":-63.2148076593876},{"lat":-17.841195922653444,"lng":-63.212156295776374},{"lat":-17.850060481186187,"lng":-63.214744627475746},{"lat":-17.853452232465514,"lng":-63.21658998727799},{"lat":-17.871446452586163,"lng":-63.2325303554535},{"lat":-17.853356493289958,"lng":-63.24477195739747},{"lat":-17.847932465721293,"lng":-63.24867457151414},{"lat":-17.849021369435683,"lng":-63.24982255697251},{"lat":-17.85212592116618,"lng":-63.26042130589486},{"lat":-17.848617977980897,"lng":-63.26179191470147},{"lat":-17.846312501675218,"lng":-63.260906785726554},{"lat":-17.844420610103406,"lng":-63.254714906215675},{"lat":-17.8428452950294,"lng":-63.25380027294159},{"lat":-17.83557364379031,"lng":-63.2542334496975},{"lat":-17.836149412114825,"lng":-63.25836136937142},{"lat":-17.83097509027937,"lng":-63.25876504182816},{"lat":-17.82960392724832,"lng":-63.25270593166352},{"lat":-17.82176358287846,"lng":-63.25290843844415},{"lat":-17.821273310510218,"lng":-63.249683082103736},{"lat":-17.816493084247014,"lng":-63.243386596441276},{"lat":-17.81518948000086,"lng":-63.24049785733224},{"lat":-17.809078628249132,"lng":-63.23437973856927},{"lat":-17.810894285549523,"lng":-63.232857584953315},{"lat":-17.807796676238265,"lng":-63.228110074996955}],"metadata":{"pointCount":31}},
+  "B1MV":{"version":"1.0","exportDate":"2026-05-11T16:38:46.711Z","sucursal":{"keyBodega":"B1MV","latitud":-17.7662369,"longitud":-63.2062348},"polygon":[{"lat":-17.78476721463254,"lng":-63.19506123661996},{"lat":-17.785269080417905,"lng":-63.2045978307724},{"lat":-17.788221504019194,"lng":-63.204884827137},{"lat":-17.789958200984337,"lng":-63.20490762591363},{"lat":-17.791974536050322,"lng":-63.216698616743095},{"lat":-17.793589886219724,"lng":-63.22618961334229},{"lat":-17.786346873928775,"lng":-63.22551503777505},{"lat":-17.786065933118994,"lng":-63.22549626231194},{"lat":-17.777080702184485,"lng":-63.22047114372254},{"lat":-17.776408962673788,"lng":-63.220363855361946},{"lat":-17.77588280752934,"lng":-63.215610980987556},{"lat":-17.76990598502451,"lng":-63.20947945117951},{"lat":-17.765317233346543,"lng":-63.205116838216796},{"lat":-17.76147934754469,"lng":-63.20269346237183},{"lat":-17.772723289933545,"lng":-63.190803229808814},{"lat":-17.77289442125819,"lng":-63.19066911935807},{"lat":-17.773134515676297,"lng":-63.19103792309762},{"lat":-17.77349721088781,"lng":-63.19151401519776},{"lat":-17.773755183794588,"lng":-63.19171652197839},{"lat":-17.774627435964078,"lng":-63.19221138954163},{"lat":-17.77511528231977,"lng":-63.19242730736733},{"lat":-17.77932577522993,"lng":-63.19368526339532},{"lat":-17.782007566125284,"lng":-63.19447651505471},{"lat":-17.783764755852687,"lng":-63.19497004151345},{"lat":-17.78446328504897,"lng":-63.19504514336587}],"metadata":{"pointCount":25}},
+  "B1MW":{"version":"1.0","exportDate":"2026-05-08T14:30:53.778Z","sucursal":{"keyBodega":"B1MW","latitud":-17.7962386,"longitud":-63.1908415},"polygon":[{"lat":-17.785271634438644,"lng":-63.204599171876914},{"lat":-17.78503538736502,"lng":-63.20013195276261},{"lat":-17.78476721463254,"lng":-63.19501563906671},{"lat":-17.784287056734243,"lng":-63.188928365707405},{"lat":-17.783993342490003,"lng":-63.185297995805755},{"lat":-17.7837928503155,"lng":-63.1820833683014},{"lat":-17.78339186529139,"lng":-63.17656740546227},{"lat":-17.7831888183913,"lng":-63.174406886100776},{"lat":-17.782925750995155,"lng":-63.17220345139505},{"lat":-17.78838878953549,"lng":-63.17139208316804},{"lat":-17.78886638243723,"lng":-63.17134246230126},{"lat":-17.789290340841323,"lng":-63.17140683531762},{"lat":-17.78983178023115,"lng":-63.171591907739646},{"lat":-17.7903476784997,"lng":-63.17193120718003},{"lat":-17.790866129218458,"lng":-63.17250385880471},{"lat":-17.801091814983245,"lng":-63.161241263151176},{"lat":-17.80139827004995,"lng":-63.16153496503831},{"lat":-17.801706001483183,"lng":-63.16185951232911},{"lat":-17.80230997076144,"lng":-63.16253140568734},{"lat":-17.80335573937064,"lng":-63.16383361816407},{"lat":-17.80413208133368,"lng":-63.16492527723313},{"lat":-17.8044666223881,"lng":-63.16541880369187},{"lat":-17.804848407023428,"lng":-63.16600486636163},{"lat":-17.805179116130773,"lng":-63.16660702228547},{"lat":-17.806051214813667,"lng":-63.16864550113679},{"lat":-17.8071518662163,"lng":-63.17127406597138},{"lat":-17.80741362106073,"lng":-63.17187756299973},{"lat":-17.807495339567627,"lng":-63.171925842762},{"lat":-17.807592380245943,"lng":-63.172042518854155},{"lat":-17.807683036621412,"lng":-63.17217260599137},{"lat":-17.807809444730015,"lng":-63.17234560847284},{"lat":-17.808022678407163,"lng":-63.172678202390685},{"lat":-17.810079668034234,"lng":-63.17636489868165},{"lat":-17.81062104435253,"lng":-63.17749410867692},{"lat":-17.81120838472602,"lng":-63.178813755512245},{"lat":-17.811555680732443,"lng":-63.17962646484376},{"lat":-17.812033211636944,"lng":-63.18093270063401},{"lat":-17.812301343402403,"lng":-63.18165689706803},{"lat":-17.812487758582723,"lng":-63.182348906993866},{"lat":-17.812720138877065,"lng":-63.18326085805894},{"lat":-17.81279930132576,"lng":-63.184159398078926},{"lat":-17.81279930132576,"lng":-63.18493455648423},{"lat":-17.81274312152709,"lng":-63.185504525899894},{"lat":-17.812648637280297,"lng":-63.186043649911895},{"lat":-17.81219536756233,"lng":-63.18727746605874},{"lat":-17.811688470203226,"lng":-63.1884576380253},{"lat":-17.81095812689035,"lng":-63.19022119045258},{"lat":-17.810355463722498,"lng":-63.191570341587074},{"lat":-17.80958425618977,"lng":-63.1931407749653},{"lat":-17.80880793795443,"lng":-63.19454491138459},{"lat":-17.807957559167516,"lng":-63.19577336311341},{"lat":-17.80755407472134,"lng":-63.19627225399018},{"lat":-17.805664325294543,"lng":-63.19781184196473},{"lat":-17.80382307720704,"lng":-63.1993380188942},{"lat":-17.802336785417737,"lng":-63.20051014423371},{"lat":-17.800899003400705,"lng":-63.20143818855286},{"lat":-17.799468871252113,"lng":-63.20219725370408},{"lat":-17.794289653929752,"lng":-63.20414990186692},{"lat":-17.793005041759333,"lng":-63.204541504383094},{"lat":-17.790009280051144,"lng":-63.20490628480912},{"lat":-17.788226611976196,"lng":-63.204882144927986}],"metadata":{"pointCount":61}},  
+  "B1MX":{"version":"1.0","exportDate":"2026-05-11T12:56:43.254Z","sucursal":{"keyBodega":"B1MX","latitud":-17.764529,"longitud":-63.149451},"polygon":[{"lat":-17.7646748242576,"lng":-63.1608670949936},{"lat":-17.76353687326877,"lng":-63.159811645746245},{"lat":-17.75655191785684,"lng":-63.15501987934113},{"lat":-17.75479701510195,"lng":-63.157334625720985},{"lat":-17.75361812971523,"lng":-63.15934225916863},{"lat":-17.751693323990654,"lng":-63.158363252878196},{"lat":-17.747115600679145,"lng":-63.155245184898384},{"lat":-17.742892853677176,"lng":-63.15286338329316},{"lat":-17.745977538015033,"lng":-63.14726024866105},{"lat":-17.74749750785315,"lng":-63.148233890533454},{"lat":-17.754699945742715,"lng":-63.13608884811402},{"lat":-17.756291365697408,"lng":-63.13341200351716},{"lat":-17.75866697428571,"lng":-63.129654228687286},{"lat":-17.77130825747844,"lng":-63.147162348032005},{"lat":-17.773852242811614,"lng":-63.15272256731988},{"lat":-17.77418173223947,"lng":-63.15390408039094},{"lat":-17.770539435509697,"lng":-63.15649241209031},{"lat":-17.765621195490887,"lng":-63.1599846482277}],"metadata":{"pointCount":18}},
+  // --- FARMACORP ---
+  "B1PA": {"version":"1.0","exportDate":"2026-03-19T01:54:14.341Z","sucursal":{"keyBodega":"B1PA","latitud":-17.809528,"longitud":-63.20161},"polygon":[{"lat":-17.786336,"lng":-63.2255169},{"lat":-17.8020062,"lng":-63.2269759},{"lat":-17.8077983,"lng":-63.2281132},{"lat":-17.8108937,"lng":-63.2328555},{"lat":-17.8090749,"lng":-63.2343786},{"lat":-17.8151879,"lng":-63.2404994},{"lat":-17.8164931,"lng":-63.2433934},{"lat":-17.8212716,"lng":-63.2496842},{"lat":-17.8217617,"lng":-63.2529122},{"lat":-17.8296058,"lng":-63.2527069},{"lat":-17.8309744,"lng":-63.2587673},{"lat":-17.8361527,"lng":-63.2583643},{"lat":-17.8355756,"lng":-63.254236},{"lat":-17.8428446,"lng":-63.2538026},{"lat":-17.8444257,"lng":-63.2547113},{"lat":-17.8463096,"lng":-63.2609066},{"lat":-17.8486202,"lng":-63.2617941},{"lat":-17.85213,"lng":-63.2604212},{"lat":-17.8486429,"lng":-63.2497641},{"lat":-17.8476116,"lng":-63.2486586},{"lat":-17.8714564,"lng":-63.2325326},{"lat":-17.8534631,"lng":-63.2165905},{"lat":-17.8726609,"lng":-63.1923864},{"lat":-17.8540022643787,"lng":-63.1718868431152},{"lat":-17.8343612,"lng":-63.1531039},{"lat":-17.8160953,"lng":-63.1668067},{"lat":-17.8110088,"lng":-63.1598329},{"lat":-17.8190036,"lng":-63.1525836},{"lat":-17.8319473,"lng":-63.1360364},{"lat":-17.8352564,"lng":-63.130629},{"lat":-17.837728,"lng":-63.1240415},{"lat":-17.8343066,"lng":-63.1229579},{"lat":-17.8335814,"lng":-63.1221103},{"lat":-17.8319472,"lng":-63.1215524},{"lat":-17.8291845,"lng":-63.1237109},{"lat":-17.8278925,"lng":-63.1214703},{"lat":-17.821754,"lng":-63.1248569},{"lat":-17.8140116,"lng":-63.1099009},{"lat":-17.8131536,"lng":-63.118677},{"lat":-17.8086183,"lng":-63.1187629},{"lat":-17.8043485,"lng":-63.1179046},{"lat":-17.8027345,"lng":-63.1167029},{"lat":-17.8030205,"lng":-63.1089782},{"lat":-17.7979473,"lng":-63.1084217},{"lat":-17.7984465,"lng":-63.0944405},{"lat":-17.7947434,"lng":-63.0835769},{"lat":-17.7805146,"lng":-63.0820227},{"lat":-17.7650673,"lng":-63.0880039},{"lat":-17.7641273,"lng":-63.1003206},{"lat":-17.768582,"lng":-63.118388},{"lat":-17.7703575,"lng":-63.1228919},{"lat":-17.7784492,"lng":-63.1437487},{"lat":-17.7809441,"lng":-63.150553},{"lat":-17.7811872,"lng":-63.1532759},{"lat":-17.7825357,"lng":-63.1675667},{"lat":-17.7838843,"lng":-63.1843037},{"lat":-17.7847015,"lng":-63.1938309},{"lat":-17.7853575,"lng":-63.206343},{"lat":-17.7856006,"lng":-63.2100959},{"lat":-17.786336,"lng":-63.2255169}],"metadata":{"pointCount":60}},
+  "B1PB": {"version":"1.0","exportDate":"2026-03-22T16:10:34.729Z","sucursal":{"keyBodega":"B1PB","latitud":-17.756799,"longitud":-63.191647},"polygon":[{"lat":-17.786346873928775,"lng":-63.22555661201478},{"lat":-17.786143830387793,"lng":-63.2255432009697},{"lat":-17.777085810460065,"lng":-63.220476508140564},{"lat":-17.773973566508797,"lng":-63.2199950516224},{"lat":-17.769940467265943,"lng":-63.24972733855248},{"lat":-17.75441767796473,"lng":-63.24972733855248},{"lat":-17.74752688529432,"lng":-63.23291659355164},{"lat":-17.73972508940604,"lng":-63.23626399040223},{"lat":-17.72770240332319,"lng":-63.2353761792183},{"lat":-17.718131707350302,"lng":-63.2170781493187},{"lat":-17.717268122362302,"lng":-63.18154692649842},{"lat":-17.696637936401892,"lng":-63.18321257829667},{"lat":-17.65419475078978,"lng":-63.1820297241211},{"lat":-17.644177945801022,"lng":-63.14101338386536},{"lat":-17.649307825973402,"lng":-63.13780814409257},{"lat":-17.6583429097614,"lng":-63.15203726291657},{"lat":-17.687014475046915,"lng":-63.13335299491883},{"lat":-17.697534839218118,"lng":-63.123340308666236},{"lat":-17.70156190319539,"lng":-63.1297454237938},{"lat":-17.707906389864995,"lng":-63.125394880771644},{"lat":-17.71131489378562,"lng":-63.12564969062806},{"lat":-17.7139977036522,"lng":-63.12704980373383},{"lat":-17.717426531754384,"lng":-63.120400607585914},{"lat":-17.730114158539973,"lng":-63.12987685203553},{"lat":-17.727673022630537,"lng":-63.13563823699952},{"lat":-17.735959464475616,"lng":-63.14063787460328},{"lat":-17.739364880404732,"lng":-63.14178317785264},{"lat":-17.740708635117095,"lng":-63.138087093830116},{"lat":-17.747174355682027,"lng":-63.12579452991486},{"lat":-17.74486501409719,"lng":-63.124238848686225},{"lat":-17.74083892258535,"lng":-63.113762140274055},{"lat":-17.757657983093754,"lng":-63.10632705688477},{"lat":-17.753284770683777,"lng":-63.09821605682374},{"lat":-17.74766483147538,"lng":-63.08212280273438},{"lat":-17.756901874571955,"lng":-63.07815313339234},{"lat":-17.761683696285417,"lng":-63.089053630828865},{"lat":-17.76507585127562,"lng":-63.087766170501716},{"lat":-17.764115428380045,"lng":-63.10032963752747},{"lat":-17.768570112329275,"lng":-63.11836481094361},{"lat":-17.78091186785165,"lng":-63.1505298614502},{"lat":-17.782909149641625,"lng":-63.172218203544624},{"lat":-17.78370345882758,"lng":-63.18205788731576},{"lat":-17.78428194866456,"lng":-63.188921660184874},{"lat":-17.784764660604576,"lng":-63.19503441452981},{"lat":-17.78591269249103,"lng":-63.21670532226563}],"metadata":{"pointCount":45}},
+  "B1PB_NOCHE": {"version":"1.0","exportDate":"2026-03-19T01:54:34.762Z","sucursal":{"keyBodega":"B1PB","latitud":-17.756799,"longitud":-63.191647},"polygon":[{"lat":-17.6541944162836,"lng":-63.1820300802855},{"lat":-17.6966205664463,"lng":-63.1832148326286},{"lat":-17.7172702241571,"lng":-63.1815491248258},{"lat":-17.7181295270473,"lng":-63.217074949768},{"lat":-17.7277021465349,"lng":-63.2353748598998},{"lat":-17.7397234805485,"lng":-63.2362645838289},{"lat":-17.7475356173035,"lng":-63.2329134069077},{"lat":-17.7544174125703,"lng":-63.2497292290892},{"lat":-17.7699408609665,"lng":-63.2497277833001},{"lat":-17.7739737973969,"lng":-63.2199931587543},{"lat":-17.7770839164117,"lng":-63.2204784221257},{"lat":-17.7861444337981,"lng":-63.22554280165},{"lat":-17.8020181073012,"lng":-63.2270006048253},{"lat":-17.8077094098174,"lng":-63.2281435139261},{"lat":-17.8108837463277,"lng":-63.233005403447},{"lat":-17.8091641410291,"lng":-63.2343935661727},{"lat":-17.8150520439796,"lng":-63.2403009700464},{"lat":-17.8163750376915,"lng":-63.243359985101},{"lat":-17.8212682334747,"lng":-63.2496837698262},{"lat":-17.8215985619288,"lng":-63.2529484465157},{"lat":-17.8295431962448,"lng":-63.2528306610989},{"lat":-17.8309323530433,"lng":-63.2588759707154},{"lat":-17.8361957674754,"lng":-63.2584133276407},{"lat":-17.8356012781321,"lng":-63.2542446811583},{"lat":-17.8428111840397,"lng":-63.2538282014015},{"lat":-17.8442655813366,"lng":-63.2546606894519},{"lat":-17.846118467777,"lng":-63.2609157355249},{"lat":-17.8484992162509,"lng":-63.2618188841195},{"lat":-17.8521397937683,"lng":-63.26047240676},{"lat":-17.8487187500894,"lng":-63.249592399433},{"lat":-17.847608870174,"lng":-63.2488162285005},{"lat":-17.871468816672,"lng":-63.2325968396378},{"lat":-17.8533399517334,"lng":-63.2165615834014},{"lat":-17.8726855668648,"lng":-63.1924495749467},{"lat":-17.8535580379276,"lng":-63.1722764774995},{"lat":-17.8344284520223,"lng":-63.153133348314},{"lat":-17.8160230178332,"lng":-63.1668179010888},{"lat":-17.8110222979393,"lng":-63.1598143831118},{"lat":-17.8189867889367,"lng":-63.1524192345855},{"lat":-17.8317685329988,"lng":-63.1362685491644},{"lat":-17.8354742534899,"lng":-63.1308185216096},{"lat":-17.8376053613123,"lng":-63.1240048605848},{"lat":-17.8341770142418,"lng":-63.1230314686622},{"lat":-17.8336210186461,"lng":-63.1221552396071},{"lat":-17.8318609741833,"lng":-63.1217297237753},{"lat":-17.8290808194524,"lng":-63.1238707933401},{"lat":-17.8277850925927,"lng":-63.1215349880322},{"lat":-17.8215775807421,"lng":-63.1246492384098},{"lat":-17.8138881051502,"lng":-63.1099515330936},{"lat":-17.8131467498729,"lng":-63.1186143492159},{"lat":-17.8084206971245,"lng":-63.1186147744788},{"lat":-17.8042499867842,"lng":-63.1180298176786},{"lat":-17.802674388113,"lng":-63.1168616689726},{"lat":-17.8030328191945,"lng":-63.1090006480847},{"lat":-17.7977929395062,"lng":-63.1083607075652},{"lat":-17.7985278381873,"lng":-63.0947917506944},{"lat":-17.7946304075026,"lng":-63.083517836877},{"lat":-17.7804862025757,"lng":-63.0819850552558},{"lat":-17.7616995815241,"lng":-63.0890280746952},{"lat":-17.7569447729733,"lng":-63.0781318659861},{"lat":-17.7476734942345,"lng":-63.0821031976936},{"lat":-17.7532846177272,"lng":-63.0982511765295},{"lat":-17.7576747750819,"lng":-63.1063163737452},{"lat":-17.7408424287041,"lng":-63.113746450856},{"lat":-17.7448649829608,"lng":-63.1242457638978},{"lat":-17.7471805866926,"lng":-63.1257825777392},{"lat":-17.740714838571,"lng":-63.1380725258769},{"lat":-17.7393712270798,"lng":-63.1417841314583},{"lat":-17.7359603903982,"lng":-63.1406324310988},{"lat":-17.7276732053043,"lng":-63.1356390230004},{"lat":-17.7301130085552,"lng":-63.1298765382774},{"lat":-17.7174252710299,"lng":-63.1203952832068},{"lat":-17.7140053689833,"lng":-63.1270578026578},{"lat":-17.7113214268774,"lng":-63.1256492634927},{"lat":-17.7079060239068,"lng":-63.1253928116487},{"lat":-17.7015625647802,"lng":-63.1297464214897},{"lat":-17.6975368834792,"lng":-63.1233386648339},{"lat":-17.687041181772,"lng":-63.1333313798034},{"lat":-17.6583465797357,"lng":-63.1520379404308},{"lat":-17.6493081079333,"lng":-63.1378069445738},{"lat":-17.644177647443,"lng":-63.1410122108898},{"lat":-17.6541944162836,"lng":-63.1820300802855}],"metadata":{"pointCount":82}},
+  "B207":{"version":"1.0","exportDate":"2026-03-24T20:29:08.843Z","sucursal":{"keyBodega":"B207","latitud":-17.3857731,"longitud":-66.1579149},"polygon":[{"lat":-17.3620443501785,"lng":-66.1553539022942},{"lat":-17.3623056181112,"lng":-66.155840569788},{"lat":-17.3624605719108,"lng":-66.1561120667295},{"lat":-17.3626360055368,"lng":-66.1563942925071},{"lat":-17.3631201395302,"lng":-66.1572496102981},{"lat":-17.3635518073302,"lng":-66.1580038560142},{"lat":-17.363801090488,"lng":-66.1584115332604},{"lat":-17.364272601808,"lng":-66.1592792530079},{"lat":-17.3649591488551,"lng":-66.1604581090012},{"lat":-17.3661786385938,"lng":-66.1624912736969},{"lat":-17.3665931757355,"lng":-66.1631239178772},{"lat":-17.3670548947336,"lng":-66.1637755412254},{"lat":-17.3672647052172,"lng":-66.164089621582},{"lat":-17.3677433075908,"lng":-66.16483553759},{"lat":-17.3691200231027,"lng":-66.1667980574112},{"lat":-17.3702826997055,"lng":-66.1684212806206},{"lat":-17.3707888720836,"lng":-66.1690831883469},{"lat":-17.3713162134904,"lng":-66.1697458685646},{"lat":-17.3718077152532,"lng":-66.170352222393},{"lat":-17.3719410240015,"lng":-66.1705371995697},{"lat":-17.3721127305884,"lng":-66.1707624098816},{"lat":-17.3731902253338,"lng":-66.1721142485046},{"lat":-17.3738581401644,"lng":-66.1732434637794},{"lat":-17.3743860738067,"lng":-66.17359769524},{"lat":-17.3747827320368,"lng":-66.1740988556061},{"lat":-17.375284868564,"lng":-66.1747378403702},{"lat":-17.3754610781892,"lng":-66.1749311022415},{"lat":-17.376029324243,"lng":-66.1756903578224},{"lat":-17.3764030004724,"lng":-66.1760282090111},{"lat":-17.3765949302686,"lng":-66.176237314167},{"lat":-17.3771477908518,"lng":-66.1765563898926},{"lat":-17.3778235193556,"lng":-66.1769666607246},{"lat":-17.3792837431635,"lng":-66.1777446005364},{"lat":-17.3807311566161,"lng":-66.1783911121063},{"lat":-17.3817809370665,"lng":-66.1789544500351},{"lat":-17.382830711496,"lng":-66.1795191290684},{"lat":-17.3841114984638,"lng":-66.1798328306345},{"lat":-17.3844170371522,"lng":-66.179957436465},{"lat":-17.3861236534087,"lng":-66.180555335298},{"lat":-17.3868191922389,"lng":-66.1809145175288},{"lat":-17.3873150758712,"lng":-66.1812790641775},{"lat":-17.3872662459819,"lng":-66.1820774273548},{"lat":-17.38755765279,"lng":-66.1823920578003},{"lat":-17.3878620624472,"lng":-66.1824647793184},{"lat":-17.3882586185289,"lng":-66.1826340603609},{"lat":-17.388949343076,"lng":-66.1829082494297},{"lat":-17.390059465768,"lng":-66.1832796017723},{"lat":-17.3924460635713,"lng":-66.1840679040108},{"lat":-17.3940456014204,"lng":-66.184501571331},{"lat":-17.395740291903,"lng":-66.185140648716},{"lat":-17.3962066256103,"lng":-66.1853372079086},{"lat":-17.3968111720796,"lng":-66.1855552247734},{"lat":-17.3978974029944,"lng":-66.1858705590973},{"lat":-17.3992255888648,"lng":-66.1863185703506},{"lat":-17.4001101715084,"lng":-66.1866334477882},{"lat":-17.4005210000231,"lng":-66.1867233173733},{"lat":-17.4007264139342,"lng":-66.1867521589117},{"lat":-17.4009318276146,"lng":-66.1867836826592},{"lat":-17.4012402914177,"lng":-66.1868105943985},{"lat":-17.4015513141507,"lng":-66.186853599392},{"lat":-17.402195245733,"lng":-66.1869247761631},{"lat":-17.4028417344794,"lng":-66.1869691308441},{"lat":-17.4041551804248,"lng":-66.1870149248619},{"lat":-17.406085767269,"lng":-66.1872779308662},{"lat":-17.4070751354442,"lng":-66.187402619524},{"lat":-17.4080644982633,"lng":-66.1875004860916},{"lat":-17.4082414296598,"lng":-66.1877123124809},{"lat":-17.4102085593291,"lng":-66.1839524110451},{"lat":-17.4098445593342,"lng":-66.1738254110451},{"lat":-17.410426559326,"lng":-66.1645584110451},{"lat":-17.4219265591649,"lng":-66.1665324110451},{"lat":-17.4264275591018,"lng":-66.1660964110451},{"lat":-17.4295905590574,"lng":-66.1621914110451},{"lat":-17.4284265590738,"lng":-66.1520124110451},{"lat":-17.4261505591057,"lng":-66.1441324110451},{"lat":-17.4237165591398,"lng":-66.1355544110451},{"lat":-17.4227685591531,"lng":-66.1185724110451},{"lat":-17.4172375592306,"lng":-66.1232024110451},{"lat":-17.4158015592507,"lng":-66.1253434110451},{"lat":-17.4076905593643,"lng":-66.1258964110451},{"lat":-17.4077715593632,"lng":-66.1275454110451},{"lat":-17.4043725594108,"lng":-66.1297384110451},{"lat":-17.4017105594481,"lng":-66.1330484110451},{"lat":-17.3974515595077,"lng":-66.1357134110451},{"lat":-17.3923325595794,"lng":-66.1373884110451},{"lat":-17.3891585596238,"lng":-66.1406724110451},{"lat":-17.3850835596808,"lng":-66.1410384110451},{"lat":-17.3821655597216,"lng":-66.1424124110451},{"lat":-17.3809842820742,"lng":-66.1408001941262},{"lat":-17.3781105339141,"lng":-66.141575506321},{"lat":-17.377066609891,"lng":-66.1418542285805},{"lat":-17.3768558255871,"lng":-66.141922909809},{"lat":-17.3765765105169,"lng":-66.1420057378731},{"lat":-17.3763842283226,"lng":-66.1420510150109},{"lat":-17.3758120769588,"lng":-66.1422240084344},{"lat":-17.3755136546562,"lng":-66.1423059634819},{"lat":-17.3753201844054,"lng":-66.1423637786485},{"lat":-17.3751178122745,"lng":-66.1424231427803},{"lat":-17.3749435294167,"lng":-66.1424694205819},{"lat":-17.3746854983994,"lng":-66.1425518749657},{"lat":-17.3742952377476,"lng":-66.1426601944313},{"lat":-17.373933254692,"lng":-66.1427705271111},{"lat":-17.373284562926,"lng":-66.1429944437828},{"lat":-17.3728343189051,"lng":-66.1431472156105},{"lat":-17.3726707776839,"lng":-66.1432087923317},{"lat":-17.3723987635319,"lng":-66.1433131150856},{"lat":-17.3720206669922,"lng":-66.1434765310936},{"lat":-17.3716365717873,"lng":-66.1436323531838},{"lat":-17.3712167282509,"lng":-66.143825371708},{"lat":-17.3705609427722,"lng":-66.1441578479042},{"lat":-17.3701513566532,"lng":-66.144340374363},{"lat":-17.3696911041956,"lng":-66.1445444603463},{"lat":-17.3693890169976,"lng":-66.1446621997719},{"lat":-17.3691074085354,"lng":-66.1447692103615},{"lat":-17.3685419238167,"lng":-66.1449735118751},{"lat":-17.3673104098813,"lng":-66.1454347710915},{"lat":-17.3668852562721,"lng":-66.1456165871773},{"lat":-17.3664349376591,"lng":-66.1458213252449},{"lat":-17.3660146229985,"lng":-66.1459929270668},{"lat":-17.3655285672335,"lng":-66.146156351326},{"lat":-17.3649292833986,"lng":-66.1463864789734},{"lat":-17.3647037561045,"lng":-66.1464672812119},{"lat":-17.3644609580342,"lng":-66.1465589498596},{"lat":-17.3642308787092,"lng":-66.1466417067985},{"lat":-17.363680600305,"lng":-66.1468484723358},{"lat":-17.3610661179556,"lng":-66.1477738185768},{"lat":-17.3603723521817,"lng":-66.1480154819145},{"lat":-17.359745350107,"lng":-66.1482455883828},{"lat":-17.3589953885177,"lng":-66.1484876273918},{"lat":-17.358056101806,"lng":-66.1488037523842},{"lat":-17.3577771035062,"lng":-66.1488952808037},{"lat":-17.357474744482,"lng":-66.1490071451912},{"lat":-17.3569016377038,"lng":-66.149195214611},{"lat":-17.3571138051417,"lng":-66.149359439148},{"lat":-17.3573770074941,"lng":-66.1495737367401},{"lat":-17.3574539823581,"lng":-66.1496402416725},{"lat":-17.3576552534715,"lng":-66.1498229010582},{"lat":-17.3579077255824,"lng":-66.1500752978783},{"lat":-17.3581393762449,"lng":-66.1502318918319},{"lat":-17.3583710266146,"lng":-66.1504099434576},{"lat":-17.3590135297225,"lng":-66.1510128099384},{"lat":-17.3591952234908,"lng":-66.1511938990516},{"lat":-17.3593845971989,"lng":-66.1513843758965},{"lat":-17.3596202670036,"lng":-66.1516151754799},{"lat":-17.36026025052,"lng":-66.1523438500709},{"lat":-17.36071307443,"lng":-66.152979927742},{"lat":-17.3614427485341,"lng":-66.1543346628685},{"lat":-17.3620443501785,"lng":-66.1553539022942}],"metadata":{"pointCount":148}},
+  "B207_NOCHE":{"version":"1.0","exportDate":"2026-03-24T20:29:08.843Z","sucursal":{"keyBodega":"B207","latitud":-17.3857731,"longitud":-66.1579149},"polygon":[{"lat":-17.3620443501785,"lng":-66.1553539022942},{"lat":-17.3623056181112,"lng":-66.155840569788},{"lat":-17.3624605719108,"lng":-66.1561120667295},{"lat":-17.3626360055368,"lng":-66.1563942925071},{"lat":-17.3631201395302,"lng":-66.1572496102981},{"lat":-17.3635518073302,"lng":-66.1580038560142},{"lat":-17.363801090488,"lng":-66.1584115332604},{"lat":-17.364272601808,"lng":-66.1592792530079},{"lat":-17.3649591488551,"lng":-66.1604581090012},{"lat":-17.3661786385938,"lng":-66.1624912736969},{"lat":-17.3665931757355,"lng":-66.1631239178772},{"lat":-17.3670548947336,"lng":-66.1637755412254},{"lat":-17.3672647052172,"lng":-66.164089621582},{"lat":-17.3677433075908,"lng":-66.16483553759},{"lat":-17.3691200231027,"lng":-66.1667980574112},{"lat":-17.3702826997055,"lng":-66.1684212806206},{"lat":-17.3707888720836,"lng":-66.1690831883469},{"lat":-17.3713162134904,"lng":-66.1697458685646},{"lat":-17.3718077152532,"lng":-66.170352222393},{"lat":-17.3719410240015,"lng":-66.1705371995697},{"lat":-17.3721127305884,"lng":-66.1707624098816},{"lat":-17.3731902253338,"lng":-66.1721142485046},{"lat":-17.3738581401644,"lng":-66.1732434637794},{"lat":-17.3743860738067,"lng":-66.17359769524},{"lat":-17.3747827320368,"lng":-66.1740988556061},{"lat":-17.375284868564,"lng":-66.1747378403702},{"lat":-17.3754610781892,"lng":-66.1749311022415},{"lat":-17.376029324243,"lng":-66.1756903578224},{"lat":-17.3764030004724,"lng":-66.1760282090111},{"lat":-17.3765949302686,"lng":-66.176237314167},{"lat":-17.3771477908518,"lng":-66.1765563898926},{"lat":-17.3778235193556,"lng":-66.1769666607246},{"lat":-17.3792837431635,"lng":-66.1777446005364},{"lat":-17.3807311566161,"lng":-66.1783911121063},{"lat":-17.3817809370665,"lng":-66.1789544500351},{"lat":-17.382830711496,"lng":-66.1795191290684},{"lat":-17.3841114984638,"lng":-66.1798328306345},{"lat":-17.3844170371522,"lng":-66.179957436465},{"lat":-17.3861236534087,"lng":-66.180555335298},{"lat":-17.3868191922389,"lng":-66.1809145175288},{"lat":-17.3873150758712,"lng":-66.1812790641775},{"lat":-17.3872662459819,"lng":-66.1820774273548},{"lat":-17.38755765279,"lng":-66.1823920578003},{"lat":-17.3878620624472,"lng":-66.1824647793184},{"lat":-17.3882586185289,"lng":-66.1826340603609},{"lat":-17.388949343076,"lng":-66.1829082494297},{"lat":-17.390059465768,"lng":-66.1832796017723},{"lat":-17.3924460635713,"lng":-66.1840679040108},{"lat":-17.3940456014204,"lng":-66.184501571331},{"lat":-17.395740291903,"lng":-66.185140648716},{"lat":-17.3962066256103,"lng":-66.1853372079086},{"lat":-17.3968111720796,"lng":-66.1855552247734},{"lat":-17.3978974029944,"lng":-66.1858705590973},{"lat":-17.3992255888648,"lng":-66.1863185703506},{"lat":-17.4001101715084,"lng":-66.1866334477882},{"lat":-17.4005210000231,"lng":-66.1867233173733},{"lat":-17.4007264139342,"lng":-66.1867521589117},{"lat":-17.4009318276146,"lng":-66.1867836826592},{"lat":-17.4012402914177,"lng":-66.1868105943985},{"lat":-17.4015513141507,"lng":-66.186853599392},{"lat":-17.402195245733,"lng":-66.1869247761631},{"lat":-17.4028417344794,"lng":-66.1869691308441},{"lat":-17.4041551804248,"lng":-66.1870149248619},{"lat":-17.406085767269,"lng":-66.1872779308662},{"lat":-17.4070751354442,"lng":-66.187402619524},{"lat":-17.4080644982633,"lng":-66.1875004860916},{"lat":-17.4082414296598,"lng":-66.1877123124809},{"lat":-17.4102085593291,"lng":-66.1839524110451},{"lat":-17.4098445593342,"lng":-66.1738254110451},{"lat":-17.410426559326,"lng":-66.1645584110451},{"lat":-17.4219265591649,"lng":-66.1665324110451},{"lat":-17.4264275591018,"lng":-66.1660964110451},{"lat":-17.4295905590574,"lng":-66.1621914110451},{"lat":-17.4284265590738,"lng":-66.1520124110451},{"lat":-17.4261505591057,"lng":-66.1441324110451},{"lat":-17.4237165591398,"lng":-66.1355544110451},{"lat":-17.4227685591531,"lng":-66.1185724110451},{"lat":-17.4172375592306,"lng":-66.1232024110451},{"lat":-17.4158015592507,"lng":-66.1253434110451},{"lat":-17.4076905593643,"lng":-66.1258964110451},{"lat":-17.4077715593632,"lng":-66.1275454110451},{"lat":-17.4043725594108,"lng":-66.1297384110451},{"lat":-17.4017105594481,"lng":-66.1330484110451},{"lat":-17.3974515595077,"lng":-66.1357134110451},{"lat":-17.3923325595794,"lng":-66.1373884110451},{"lat":-17.3891585596238,"lng":-66.1406724110451},{"lat":-17.3850835596808,"lng":-66.1410384110451},{"lat":-17.3821655597216,"lng":-66.1424124110451},{"lat":-17.3809842820742,"lng":-66.1408001941262},{"lat":-17.3781105339141,"lng":-66.141575506321},{"lat":-17.377066609891,"lng":-66.1418542285805},{"lat":-17.3768558255871,"lng":-66.141922909809},{"lat":-17.3765765105169,"lng":-66.1420057378731},{"lat":-17.3763842283226,"lng":-66.1420510150109},{"lat":-17.3758120769588,"lng":-66.1422240084344},{"lat":-17.3755136546562,"lng":-66.1423059634819},{"lat":-17.3753201844054,"lng":-66.1423637786485},{"lat":-17.3751178122745,"lng":-66.1424231427803},{"lat":-17.3749435294167,"lng":-66.1424694205819},{"lat":-17.3746854983994,"lng":-66.1425518749657},{"lat":-17.3742952377476,"lng":-66.1426601944313},{"lat":-17.373933254692,"lng":-66.1427705271111},{"lat":-17.373284562926,"lng":-66.1429944437828},{"lat":-17.3728343189051,"lng":-66.1431472156105},{"lat":-17.3726707776839,"lng":-66.1432087923317},{"lat":-17.3723987635319,"lng":-66.1433131150856},{"lat":-17.3720206669922,"lng":-66.1434765310936},{"lat":-17.3716365717873,"lng":-66.1436323531838},{"lat":-17.3712167282509,"lng":-66.143825371708},{"lat":-17.3705609427722,"lng":-66.1441578479042},{"lat":-17.3701513566532,"lng":-66.144340374363},{"lat":-17.3696911041956,"lng":-66.1445444603463},{"lat":-17.3693890169976,"lng":-66.1446621997719},{"lat":-17.3691074085354,"lng":-66.1447692103615},{"lat":-17.3685419238167,"lng":-66.1449735118751},{"lat":-17.3673104098813,"lng":-66.1454347710915},{"lat":-17.3668852562721,"lng":-66.1456165871773},{"lat":-17.3664349376591,"lng":-66.1458213252449},{"lat":-17.3660146229985,"lng":-66.1459929270668},{"lat":-17.3655285672335,"lng":-66.146156351326},{"lat":-17.3649292833986,"lng":-66.1463864789734},{"lat":-17.3647037561045,"lng":-66.1464672812119},{"lat":-17.3644609580342,"lng":-66.1465589498596},{"lat":-17.3642308787092,"lng":-66.1466417067985},{"lat":-17.363680600305,"lng":-66.1468484723358},{"lat":-17.3610661179556,"lng":-66.1477738185768},{"lat":-17.3603723521817,"lng":-66.1480154819145},{"lat":-17.359745350107,"lng":-66.1482455883828},{"lat":-17.3589953885177,"lng":-66.1484876273918},{"lat":-17.358056101806,"lng":-66.1488037523842},{"lat":-17.3577771035062,"lng":-66.1488952808037},{"lat":-17.357474744482,"lng":-66.1490071451912},{"lat":-17.3569016377038,"lng":-66.149195214611},{"lat":-17.3571138051417,"lng":-66.149359439148},{"lat":-17.3573770074941,"lng":-66.1495737367401},{"lat":-17.3574539823581,"lng":-66.1496402416725},{"lat":-17.3576552534715,"lng":-66.1498229010582},{"lat":-17.3579077255824,"lng":-66.1500752978783},{"lat":-17.3581393762449,"lng":-66.1502318918319},{"lat":-17.3583710266146,"lng":-66.1504099434576},{"lat":-17.3590135297225,"lng":-66.1510128099384},{"lat":-17.3591952234908,"lng":-66.1511938990516},{"lat":-17.3593845971989,"lng":-66.1513843758965},{"lat":-17.3596202670036,"lng":-66.1516151754799},{"lat":-17.36026025052,"lng":-66.1523438500709},{"lat":-17.36071307443,"lng":-66.152979927742},{"lat":-17.3614427485341,"lng":-66.1543346628685},{"lat":-17.3620443501785,"lng":-66.1553539022942}],"metadata":{"pointCount":148}},
+  "B209":{"version":"1.0","exportDate":"2026-03-24T20:24:01.603Z","sucursal":{"keyBodega":"B209","latitud":-17.3914211,"longitud":-66.2195447},"polygon":[{"lat":-17.3488638852458,"lng":-66.22508213684},{"lat":-17.3499273848301,"lng":-66.22544813684},{"lat":-17.3659223785752,"lng":-66.2308550042992},{"lat":-17.3702386384259,"lng":-66.2322794128975},{"lat":-17.3748210184818,"lng":-66.23374673684},{"lat":-17.3809749726837,"lng":-66.23558823684},{"lat":-17.3815989724394,"lng":-66.23575623684},{"lat":-17.3820360722682,"lng":-66.2359135368401},{"lat":-17.3840827714667,"lng":-66.23664653684},{"lat":-17.3890310747545,"lng":-66.2383031561516},{"lat":-17.3916382748921,"lng":-66.2390241774468},{"lat":-17.3934263792178,"lng":-66.2396915545616},{"lat":-17.3934466644869,"lng":-66.2414395042992},{"lat":-17.3948845521828,"lng":-66.2414665042992},{"lat":-17.396322428574,"lng":-66.2414988687172},{"lat":-17.3976943611887,"lng":-66.2415412619713},{"lat":-17.3983772178027,"lng":-66.2415986773155},{"lat":-17.3987160365772,"lng":-66.2415938484794},{"lat":-17.399019022536,"lng":-66.2416064773155},{"lat":-17.4005633785936,"lng":-66.2421223128975},{"lat":-17.4021384477005,"lng":-66.2426716638237},{"lat":-17.4028819075053,"lng":-66.2422505926598},{"lat":-17.403702069569,"lng":-66.2417839349876},{"lat":-17.4031635942789,"lng":-66.2258687656761},{"lat":-17.4019991044909,"lng":-66.2147622492821},{"lat":-17.4017509511645,"lng":-66.2061064601189},{"lat":-17.4030879017393,"lng":-66.196568917791},{"lat":-17.4034367827329,"lng":-66.1899815619713},{"lat":-17.4069745437453,"lng":-66.19043203684},{"lat":-17.4082966181192,"lng":-66.1879080147499},{"lat":-17.4080636684696,"lng":-66.1875942196434},{"lat":-17.4073316809554,"lng":-66.1874829835983},{"lat":-17.4065996905093,"lng":-66.1873932052254},{"lat":-17.4051305820214,"lng":-66.1871948730164},{"lat":-17.4044049808752,"lng":-66.1871104475532},{"lat":-17.4040345009755,"lng":-66.1870722581352},{"lat":-17.4036640203249,"lng":-66.1870555263893},{"lat":-17.4021565832707,"lng":-66.1869858730164},{"lat":-17.4006156244534,"lng":-66.1867796239426},{"lat":-17.4002485948851,"lng":-66.1866903736454},{"lat":-17.3996051412146,"lng":-66.1864777417336},{"lat":-17.3990747950184,"lng":-66.186316489584},{"lat":-17.39857516119,"lng":-66.1861418263893},{"lat":-17.3980473715057,"lng":-66.1859644809856},{"lat":-17.3975144612844,"lng":-66.1858032288361},{"lat":-17.3968381128949,"lng":-66.1856179398811},{"lat":-17.3963306906245,"lng":-66.1854514263893},{"lat":-17.3962191817201,"lng":-66.1854681372858},{"lat":-17.3961230299061,"lng":-66.1854526616741},{"lat":-17.3960652709519,"lng":-66.1854076817633},{"lat":-17.3960100715072,"lng":-66.1853063754631},{"lat":-17.3954852398794,"lng":-66.1851483773155},{"lat":-17.395212001871,"lng":-66.185075354002},{"lat":-17.3949976329306,"lng":-66.1849969662704},{"lat":-17.3945612156516,"lng":-66.1848267797623},{"lat":-17.3931865762598,"lng":-66.1843739312828},{"lat":-17.3930016050378,"lng":-66.184341267105},{"lat":-17.3926477017624,"lng":-66.1842388654928},{"lat":-17.3921088256775,"lng":-66.1840689309856},{"lat":-17.3910848202854,"lng":-66.1837156509262},{"lat":-17.3803522729275,"lng":-66.19431073684},{"lat":-17.3679552777798,"lng":-66.20644733684},{"lat":-17.3584983814791,"lng":-66.21567593684},{"lat":-17.3488638852458,"lng":-66.22508213684}],"metadata":{"pointCount":64}},
+  "B209_NOCHE":{"version":"1.0","exportDate":"2026-03-24T20:24:01.603Z","sucursal":{"keyBodega":"B209","latitud":-17.3914211,"longitud":-66.2195447},"polygon":[{"lat":-17.3488638852458,"lng":-66.22508213684},{"lat":-17.3499273848301,"lng":-66.22544813684},{"lat":-17.3659223785752,"lng":-66.2308550042992},{"lat":-17.3702386384259,"lng":-66.2322794128975},{"lat":-17.3748210184818,"lng":-66.23374673684},{"lat":-17.3809749726837,"lng":-66.23558823684},{"lat":-17.3815989724394,"lng":-66.23575623684},{"lat":-17.3820360722682,"lng":-66.2359135368401},{"lat":-17.3840827714667,"lng":-66.23664653684},{"lat":-17.3890310747545,"lng":-66.2383031561516},{"lat":-17.3916382748921,"lng":-66.2390241774468},{"lat":-17.3934263792178,"lng":-66.2396915545616},{"lat":-17.3934466644869,"lng":-66.2414395042992},{"lat":-17.3948845521828,"lng":-66.2414665042992},{"lat":-17.396322428574,"lng":-66.2414988687172},{"lat":-17.3976943611887,"lng":-66.2415412619713},{"lat":-17.3983772178027,"lng":-66.2415986773155},{"lat":-17.3987160365772,"lng":-66.2415938484794},{"lat":-17.399019022536,"lng":-66.2416064773155},{"lat":-17.4005633785936,"lng":-66.2421223128975},{"lat":-17.4021384477005,"lng":-66.2426716638237},{"lat":-17.4028819075053,"lng":-66.2422505926598},{"lat":-17.403702069569,"lng":-66.2417839349876},{"lat":-17.4031635942789,"lng":-66.2258687656761},{"lat":-17.4019991044909,"lng":-66.2147622492821},{"lat":-17.4017509511645,"lng":-66.2061064601189},{"lat":-17.4030879017393,"lng":-66.196568917791},{"lat":-17.4034367827329,"lng":-66.1899815619713},{"lat":-17.4069745437453,"lng":-66.19043203684},{"lat":-17.4082966181192,"lng":-66.1879080147499},{"lat":-17.4080636684696,"lng":-66.1875942196434},{"lat":-17.4073316809554,"lng":-66.1874829835983},{"lat":-17.4065996905093,"lng":-66.1873932052254},{"lat":-17.4051305820214,"lng":-66.1871948730164},{"lat":-17.4044049808752,"lng":-66.1871104475532},{"lat":-17.4040345009755,"lng":-66.1870722581352},{"lat":-17.4036640203249,"lng":-66.1870555263893},{"lat":-17.4021565832707,"lng":-66.1869858730164},{"lat":-17.4006156244534,"lng":-66.1867796239426},{"lat":-17.4002485948851,"lng":-66.1866903736454},{"lat":-17.3996051412146,"lng":-66.1864777417336},{"lat":-17.3990747950184,"lng":-66.186316489584},{"lat":-17.39857516119,"lng":-66.1861418263893},{"lat":-17.3980473715057,"lng":-66.1859644809856},{"lat":-17.3975144612844,"lng":-66.1858032288361},{"lat":-17.3968381128949,"lng":-66.1856179398811},{"lat":-17.3963306906245,"lng":-66.1854514263893},{"lat":-17.3962191817201,"lng":-66.1854681372858},{"lat":-17.3961230299061,"lng":-66.1854526616741},{"lat":-17.3960652709519,"lng":-66.1854076817633},{"lat":-17.3960100715072,"lng":-66.1853063754631},{"lat":-17.3954852398794,"lng":-66.1851483773155},{"lat":-17.395212001871,"lng":-66.185075354002},{"lat":-17.3949976329306,"lng":-66.1849969662704},{"lat":-17.3945612156516,"lng":-66.1848267797623},{"lat":-17.3931865762598,"lng":-66.1843739312828},{"lat":-17.3930016050378,"lng":-66.184341267105},{"lat":-17.3926477017624,"lng":-66.1842388654928},{"lat":-17.3921088256775,"lng":-66.1840689309856},{"lat":-17.3910848202854,"lng":-66.1837156509262},{"lat":-17.3803522729275,"lng":-66.19431073684},{"lat":-17.3679552777798,"lng":-66.20644733684},{"lat":-17.3584983814791,"lng":-66.21567593684},{"lat":-17.3488638852458,"lng":-66.22508213684}],"metadata":{"pointCount":64}},
+  "B211":{"version":"1.0","exportDate":"2026-03-24T20:20:40.699Z","sucursal":{"keyBodega":"B211","latitud":-17.3639369,"longitud":-66.1792655},"polygon":[{"lat":-17.3873085,"lng":-66.1812478},{"lat":-17.3827724449303,"lng":-66.1795852460632},{"lat":-17.3792751387976,"lng":-66.1781724653206},{"lat":-17.3743318193476,"lng":-66.1742474241314},{"lat":-17.3700343644014,"lng":-66.1682665262304},{"lat":-17.3646923455561,"lng":-66.1606548452482},{"lat":-17.3614990363436,"lng":-66.1543545503733},{"lat":-17.3598212177919,"lng":-66.1519702806602},{"lat":-17.3568546664675,"lng":-66.149208033577},{"lat":-17.3569260428617,"lng":-66.1499052808246},{"lat":-17.3557237720536,"lng":-66.1499569827271},{"lat":-17.350225582041,"lng":-66.1500475766602},{"lat":-17.3486024274077,"lng":-66.1538004867248},{"lat":-17.3458117974938,"lng":-66.1578752618713},{"lat":-17.3429135927836,"lng":-66.1643725714111},{"lat":-17.3406584816647,"lng":-66.1692612605743},{"lat":-17.3380346545331,"lng":-66.1737637116394},{"lat":-17.334032,"lng":-66.185252},{"lat":-17.330831,"lng":-66.195009},{"lat":-17.3287592857371,"lng":-66.2029274404755},{"lat":-17.326749,"lng":-66.211039},{"lat":-17.326708,"lng":-66.217219},{"lat":-17.3322991,"lng":-66.2193841},{"lat":-17.3374451,"lng":-66.2210435},{"lat":-17.343326,"lng":-66.222989},{"lat":-17.3482532,"lng":-66.2247236},{"lat":-17.3487922,"lng":-66.2248971},{"lat":-17.3909594,"lng":-66.1836835},{"lat":-17.390419,"lng":-66.1835239},{"lat":-17.3886704,"lng":-66.1829378},{"lat":-17.3882383,"lng":-66.1827682},{"lat":-17.3878216,"lng":-66.1825772},{"lat":-17.3875919,"lng":-66.1823462},{"lat":-17.387361,"lng":-66.1818641},{"lat":-17.3873085,"lng":-66.1812478}],"metadata":{"pointCount":35}},
+  "B211_NOCHE":{"version":"1.0","exportDate":"2026-03-24T20:20:40.699Z","sucursal":{"keyBodega":"B211","latitud":-17.3639369,"longitud":-66.1792655},"polygon":[{"lat":-17.3873085,"lng":-66.1812478},{"lat":-17.3827724449303,"lng":-66.1795852460632},{"lat":-17.3792751387976,"lng":-66.1781724653206},{"lat":-17.3743318193476,"lng":-66.1742474241314},{"lat":-17.3700343644014,"lng":-66.1682665262304},{"lat":-17.3646923455561,"lng":-66.1606548452482},{"lat":-17.3614990363436,"lng":-66.1543545503733},{"lat":-17.3598212177919,"lng":-66.1519702806602},{"lat":-17.3568546664675,"lng":-66.149208033577},{"lat":-17.3569260428617,"lng":-66.1499052808246},{"lat":-17.3557237720536,"lng":-66.1499569827271},{"lat":-17.350225582041,"lng":-66.1500475766602},{"lat":-17.3486024274077,"lng":-66.1538004867248},{"lat":-17.3458117974938,"lng":-66.1578752618713},{"lat":-17.3429135927836,"lng":-66.1643725714111},{"lat":-17.3406584816647,"lng":-66.1692612605743},{"lat":-17.3380346545331,"lng":-66.1737637116394},{"lat":-17.334032,"lng":-66.185252},{"lat":-17.330831,"lng":-66.195009},{"lat":-17.3287592857371,"lng":-66.2029274404755},{"lat":-17.326749,"lng":-66.211039},{"lat":-17.326708,"lng":-66.217219},{"lat":-17.3322991,"lng":-66.2193841},{"lat":-17.3374451,"lng":-66.2210435},{"lat":-17.343326,"lng":-66.222989},{"lat":-17.3482532,"lng":-66.2247236},{"lat":-17.3487922,"lng":-66.2248971},{"lat":-17.3909594,"lng":-66.1836835},{"lat":-17.390419,"lng":-66.1835239},{"lat":-17.3886704,"lng":-66.1829378},{"lat":-17.3882383,"lng":-66.1827682},{"lat":-17.3878216,"lng":-66.1825772},{"lat":-17.3875919,"lng":-66.1823462},{"lat":-17.387361,"lng":-66.1818641},{"lat":-17.3873085,"lng":-66.1812478}],"metadata":{"pointCount":35}},
+  "B225":{"version":"1.0","exportDate":"2026-03-24T20:15:12.084Z","sucursal":{"keyBodega":"B225","latitud":-17.373376,"longitud":-66.123169},"polygon":[{"lat":-17.3637164,"lng":-66.1317245423279},{"lat":-17.3614424,"lng":-66.1312095423279},{"lat":-17.3614424,"lng":-66.1343855423279},{"lat":-17.3607732,"lng":-66.1360202423279},{"lat":-17.3602779,"lng":-66.1371024423279},{"lat":-17.3597008,"lng":-66.1382705423279},{"lat":-17.3589444,"lng":-66.1395565423279},{"lat":-17.3568964,"lng":-66.1422605423279},{"lat":-17.3566778,"lng":-66.1455214423279},{"lat":-17.3566094,"lng":-66.1464225423279},{"lat":-17.3568137372924,"lng":-66.1492383865082},{"lat":-17.3599113,"lng":-66.1481540423279},{"lat":-17.3629167,"lng":-66.1470724846558},{"lat":-17.3644444,"lng":-66.1465346423279},{"lat":-17.3659702,"lng":-66.1459525423279},{"lat":-17.3688297225903,"lng":-66.1447361116394},{"lat":-17.3718277590094,"lng":-66.1435557809509},{"lat":-17.3752045999396,"lng":-66.1423969079346},{"lat":-17.3780155129651,"lng":-66.141530938623},{"lat":-17.3809467,"lng":-66.1407143423279},{"lat":-17.3804509627868,"lng":-66.1398941202377},{"lat":-17.3797914,"lng":-66.1391597288361},{"lat":-17.3783805,"lng":-66.1382266423279},{"lat":-17.3752384,"lng":-66.1365125423279},{"lat":-17.3744914,"lng":-66.1318345423279},{"lat":-17.3822614,"lng":-66.1247625423279},{"lat":-17.3912624,"lng":-66.1199895423279},{"lat":-17.3947814,"lng":-66.1145315423279},{"lat":-17.3951594,"lng":-66.1102450423279},{"lat":-17.3953034,"lng":-66.1086605423279},{"lat":-17.3953531,"lng":-66.1075464423279},{"lat":-17.3954475,"lng":-66.1055151423279},{"lat":-17.3956134,"lng":-66.1031405423279},{"lat":-17.3955764,"lng":-66.1004325423279},{"lat":-17.3937248,"lng":-66.0998676423279},{"lat":-17.3928184765814,"lng":-66.0995201693115},{"lat":-17.3925666,"lng":-66.0994227472214},{"lat":-17.3923403191585,"lng":-66.0993166251312},{"lat":-17.3921678299694,"lng":-66.0992268962952},{"lat":-17.3919789833996,"lng":-66.0991586251312},{"lat":-17.3913100686358,"lng":-66.0988731521149},{"lat":-17.3906798311454,"lng":-66.0986832281723},{"lat":-17.3894600518122,"lng":-66.0985751987419},{"lat":-17.3889365702639,"lng":-66.0985369386231},{"lat":-17.3883644541621,"lng":-66.0985174539673},{"lat":-17.3877193896072,"lng":-66.0984751904755},{"lat":-17.3870948,"lng":-66.0984275625656},{"lat":-17.3855874,"lng":-66.0983145423279},{"lat":-17.3837391910025,"lng":-66.09792051157},{"lat":-17.381376394659,"lng":-66.0976226907379},{"lat":-17.3807997,"lng":-66.097512690738},{"lat":-17.3801898,"lng":-66.0974191423279},{"lat":-17.3789827265643,"lng":-66.0973382539673},{"lat":-17.3776414,"lng":-66.0971345423279},{"lat":-17.3767337,"lng":-66.0968827423279},{"lat":-17.376341,"lng":-66.0967722423279},{"lat":-17.3759483,"lng":-66.0966456423279},{"lat":-17.3743259,"lng":-66.0960678423279},{"lat":-17.3742568,"lng":-66.0960426423279},{"lat":-17.3741675,"lng":-66.0960104423279},{"lat":-17.3741022,"lng":-66.0959883423279},{"lat":-17.3738998,"lng":-66.0959158423279},{"lat":-17.3736968,"lng":-66.0958439423279},{"lat":-17.3733386,"lng":-66.0957176423279},{"lat":-17.3727581,"lng":-66.0955125423279},{"lat":-17.3711604,"lng":-66.0949455423279},{"lat":-17.3686494,"lng":-66.1049345423279},{"lat":-17.3676534,"lng":-66.1111035423279},{"lat":-17.3658254,"lng":-66.1181625423279},{"lat":-17.3656067,"lng":-66.1197931423279},{"lat":-17.3653911,"lng":-66.1213975423279},{"lat":-17.3653034,"lng":-66.1220365423279},{"lat":-17.3652069,"lng":-66.1237581423279},{"lat":-17.3650674,"lng":-66.1261885423279},{"lat":-17.3659074,"lng":-66.1281195423279},{"lat":-17.3651494,"lng":-66.1280975423279},{"lat":-17.3643914,"lng":-66.1295355423279},{"lat":-17.3641054,"lng":-66.1308445423279},{"lat":-17.3637164,"lng":-66.1317245423279}],"metadata":{"pointCount":79}},
+  "B225_NOCHE":{"version":"1.0","exportDate":"2026-03-24T20:15:12.084Z","sucursal":{"keyBodega":"B225","latitud":-17.373376,"longitud":-66.123169},"polygon":[{"lat":-17.3637164,"lng":-66.1317245423279},{"lat":-17.3614424,"lng":-66.1312095423279},{"lat":-17.3614424,"lng":-66.1343855423279},{"lat":-17.3607732,"lng":-66.1360202423279},{"lat":-17.3602779,"lng":-66.1371024423279},{"lat":-17.3597008,"lng":-66.1382705423279},{"lat":-17.3589444,"lng":-66.1395565423279},{"lat":-17.3568964,"lng":-66.1422605423279},{"lat":-17.3566778,"lng":-66.1455214423279},{"lat":-17.3566094,"lng":-66.1464225423279},{"lat":-17.3568137372924,"lng":-66.1492383865082},{"lat":-17.3599113,"lng":-66.1481540423279},{"lat":-17.3629167,"lng":-66.1470724846558},{"lat":-17.3644444,"lng":-66.1465346423279},{"lat":-17.3659702,"lng":-66.1459525423279},{"lat":-17.3688297225903,"lng":-66.1447361116394},{"lat":-17.3718277590094,"lng":-66.1435557809509},{"lat":-17.3752045999396,"lng":-66.1423969079346},{"lat":-17.3780155129651,"lng":-66.141530938623},{"lat":-17.3809467,"lng":-66.1407143423279},{"lat":-17.3804509627868,"lng":-66.1398941202377},{"lat":-17.3797914,"lng":-66.1391597288361},{"lat":-17.3783805,"lng":-66.1382266423279},{"lat":-17.3752384,"lng":-66.1365125423279},{"lat":-17.3744914,"lng":-66.1318345423279},{"lat":-17.3822614,"lng":-66.1247625423279},{"lat":-17.3912624,"lng":-66.1199895423279},{"lat":-17.3947814,"lng":-66.1145315423279},{"lat":-17.3951594,"lng":-66.1102450423279},{"lat":-17.3953034,"lng":-66.1086605423279},{"lat":-17.3953531,"lng":-66.1075464423279},{"lat":-17.3954475,"lng":-66.1055151423279},{"lat":-17.3956134,"lng":-66.1031405423279},{"lat":-17.3955764,"lng":-66.1004325423279},{"lat":-17.3937248,"lng":-66.0998676423279},{"lat":-17.3928184765814,"lng":-66.0995201693115},{"lat":-17.3925666,"lng":-66.0994227472214},{"lat":-17.3923403191585,"lng":-66.0993166251312},{"lat":-17.3921678299694,"lng":-66.0992268962952},{"lat":-17.3919789833996,"lng":-66.0991586251312},{"lat":-17.3913100686358,"lng":-66.0988731521149},{"lat":-17.3906798311454,"lng":-66.0986832281723},{"lat":-17.3894600518122,"lng":-66.0985751987419},{"lat":-17.3889365702639,"lng":-66.0985369386231},{"lat":-17.3883644541621,"lng":-66.0985174539673},{"lat":-17.3877193896072,"lng":-66.0984751904755},{"lat":-17.3870948,"lng":-66.0984275625656},{"lat":-17.3855874,"lng":-66.0983145423279},{"lat":-17.3837391910025,"lng":-66.09792051157},{"lat":-17.381376394659,"lng":-66.0976226907379},{"lat":-17.3807997,"lng":-66.097512690738},{"lat":-17.3801898,"lng":-66.0974191423279},{"lat":-17.3789827265643,"lng":-66.0973382539673},{"lat":-17.3776414,"lng":-66.0971345423279},{"lat":-17.3767337,"lng":-66.0968827423279},{"lat":-17.376341,"lng":-66.0967722423279},{"lat":-17.3759483,"lng":-66.0966456423279},{"lat":-17.3743259,"lng":-66.0960678423279},{"lat":-17.3742568,"lng":-66.0960426423279},{"lat":-17.3741675,"lng":-66.0960104423279},{"lat":-17.3741022,"lng":-66.0959883423279},{"lat":-17.3738998,"lng":-66.0959158423279},{"lat":-17.3736968,"lng":-66.0958439423279},{"lat":-17.3733386,"lng":-66.0957176423279},{"lat":-17.3727581,"lng":-66.0955125423279},{"lat":-17.3711604,"lng":-66.0949455423279},{"lat":-17.3686494,"lng":-66.1049345423279},{"lat":-17.3676534,"lng":-66.1111035423279},{"lat":-17.3658254,"lng":-66.1181625423279},{"lat":-17.3656067,"lng":-66.1197931423279},{"lat":-17.3653911,"lng":-66.1213975423279},{"lat":-17.3653034,"lng":-66.1220365423279},{"lat":-17.3652069,"lng":-66.1237581423279},{"lat":-17.3650674,"lng":-66.1261885423279},{"lat":-17.3659074,"lng":-66.1281195423279},{"lat":-17.3651494,"lng":-66.1280975423279},{"lat":-17.3643914,"lng":-66.1295355423279},{"lat":-17.3641054,"lng":-66.1308445423279},{"lat":-17.3637164,"lng":-66.1317245423279}],"metadata":{"pointCount":79}},
+  "B301":{"version":"1.0","exportDate":"2026-03-24T20:35:46.152Z","sucursal":{"keyBodega":"B301","latitud":-16.5397917,"longitud":-68.0780649},"polygon":[{"lat":-16.5290625289884,"lng":-68.1119250191335},{"lat":-16.5353541398651,"lng":-68.1049017451361},{"lat":-16.5407846160805,"lng":-68.1048159144476},{"lat":-16.5419365156284,"lng":-68.1008677027777},{"lat":-16.5444048486407,"lng":-68.1018976710394},{"lat":-16.5528792182234,"lng":-68.0967478297308},{"lat":-16.5606950541054,"lng":-68.1047300837592},{"lat":-16.5624227224138,"lng":-68.1008677027777},{"lat":-16.561846834699,"lng":-68.0889372370795},{"lat":-16.5475313584431,"lng":-68.0865516494738},{"lat":-16.5516451099016,"lng":-68.0765952896105},{"lat":-16.5497897159925,"lng":-68.0726470779406},{"lat":-16.5488024141462,"lng":-68.0499877761828},{"lat":-16.5449354332431,"lng":-68.0513610671984},{"lat":-16.5435367189284,"lng":-68.0440654586779},{"lat":-16.5407392598717,"lng":-68.0402030776964},{"lat":-16.5367898368524,"lng":-68.0384864639269},{"lat":-16.5323466393375,"lng":-68.039945585631},{"lat":-16.5316883791546,"lng":-68.0448379348742},{"lat":-16.5334985892559,"lng":-68.0482711624132},{"lat":-16.5380240402299,"lng":-68.0615749191271},{"lat":-16.5367898368524,"lng":-68.0715312789904},{"lat":-16.5297135851382,"lng":-68.0623473953234},{"lat":-16.5283147604879,"lng":-68.0662097763048},{"lat":-16.526010791913,"lng":-68.0664672683702},{"lat":-16.5275742021583,"lng":-68.0602016281115},{"lat":-16.5239536538848,"lng":-68.0553951095568},{"lat":-16.5142436666388,"lng":-68.0524768661486},{"lat":-16.5107874517333,"lng":-68.0577983688341},{"lat":-16.5127624392474,"lng":-68.0640640090929},{"lat":-16.5203330377369,"lng":-68.0684413742052},{"lat":-16.525434795474,"lng":-68.0717887710558},{"lat":-16.523130792538,"lng":-68.0735053848253},{"lat":-16.526422216889,"lng":-68.0775394271837},{"lat":-16.5179719843328,"lng":-68.0816461062812},{"lat":-16.5141043857724,"lng":-68.0814744449042},{"lat":-16.5118002477088,"lng":-68.0792428470038},{"lat":-16.5071095960649,"lng":-68.080530307331},{"lat":-16.5037355481952,"lng":-68.0851651645087},{"lat":-16.5144469063367,"lng":-68.0919264687184},{"lat":-16.5229734330869,"lng":-68.09184063803},{"lat":-16.5270877081126,"lng":-68.0901240242604},{"lat":-16.5339172111049,"lng":-68.0867766274098},{"lat":-16.5409110299784,"lng":-68.0913256538991},{"lat":-16.5404996358855,"lng":-68.0933855904225},{"lat":-16.5318601573177,"lng":-68.089866532195},{"lat":-16.524536867922,"lng":-68.0926989449147},{"lat":-16.5224797141938,"lng":-68.0983637703542},{"lat":-16.5247837248969,"lng":-68.101024521697},{"lat":-16.5239608670868,"lng":-68.1093500984792},{"lat":-16.5290625289884,"lng":-68.1119250191335}],"metadata":{"pointCount":51}},
+  "B303":{"version":"1.0","exportDate":"2026-07-20T20:50:23.001Z","sucursal":{"keyBodega":"B303","latitud":-16.5113988,"longitud":-68.1268032},"polygon":[{"lat":-16.4976596607377,"lng":-68.154758065939},{"lat":-16.4978834059947,"lng":-68.1547299027443},{"lat":-16.50405172935,"lng":-68.1483381986618},{"lat":-16.5075016355452,"lng":-68.1429469585419},{"lat":-16.5142803997276,"lng":-68.1440962851048},{"lat":-16.5168686625548,"lng":-68.1426814198494},{"lat":-16.5194234612591,"lng":-68.1394211947918},{"lat":-16.5206616328752,"lng":-68.1326419115067},{"lat":-16.5205716310521,"lng":-68.1285730004311},{"lat":-16.5232832390038,"lng":-68.1254415214062},{"lat":-16.5259266665341,"lng":-68.1271326541901},{"lat":-16.5253545269705,"lng":-68.1277334690094},{"lat":-16.5267109449791,"lng":-68.1296204030514},{"lat":-16.5280210685878,"lng":-68.1293642520905},{"lat":-16.5317649645791,"lng":-68.1251183152199},{"lat":-16.5304844368947,"lng":-68.1242251396179},{"lat":-16.5264062338961,"lng":-68.1169778108597},{"lat":-16.529094617617,"lng":-68.1125803291798},{"lat":-16.5244596715801,"lng":-68.1097117066384},{"lat":-16.5252400988544,"lng":-68.1008711457253},{"lat":-16.5230209514198,"lng":-68.098941296339},{"lat":-16.5195944657034,"lng":-68.1034031510353},{"lat":-16.5180271335919,"lng":-68.1088064610958},{"lat":-16.5069950188119,"lng":-68.1102830171585},{"lat":-16.4976596607377,"lng":-68.154758065939}],"metadata":{"pointCount":25}},
+  "B311":{"version":"1.0","exportDate":"2026-03-24T21:00:48.268Z","sucursal":{"keyBodega":"B311","latitud":-16.502733,"longitud":-68.122218},"polygon":[{"lat":-16.470357121461,"lng":-68.1518942341328},{"lat":-16.4742680870808,"lng":-68.1520226569524},{"lat":-16.4800015341874,"lng":-68.1479999642491},{"lat":-16.4865758544423,"lng":-68.1525169248564},{"lat":-16.4942808332468,"lng":-68.1550111810126},{"lat":-16.4978828354846,"lng":-68.1547318124723},{"lat":-16.5040441531426,"lng":-68.1483356411538},{"lat":-16.5075004886109,"lng":-68.1429466358064},{"lat":-16.5142814211494,"lng":-68.1440968001298},{"lat":-16.5168735412586,"lng":-68.1426805937699},{"lat":-16.5194244826537,"lng":-68.1394190276078},{"lat":-16.5206635394455,"lng":-68.1326384032182},{"lat":-16.5205708651286,"lng":-68.1285718582619},{"lat":-16.5232863302587,"lng":-68.1254390381325},{"lat":-16.5259286680863,"lng":-68.1271319210049},{"lat":-16.5253526714023,"lng":-68.1277327358242},{"lat":-16.5267103751237,"lng":-68.1296210109707},{"lat":-16.5280269271914,"lng":-68.1293635189053},{"lat":-16.5317708230691,"lng":-68.1251148998257},{"lat":-16.5304828396929,"lng":-68.1242268191878},{"lat":-16.5264097794676,"lng":-68.1169741260115},{"lat":-16.5294701547507,"lng":-68.1117648282639},{"lat":-16.5252736451065,"lng":-68.1094903150193},{"lat":-16.5255616437811,"lng":-68.1012516338708},{"lat":-16.5235867871017,"lng":-68.098762543905},{"lat":-16.5195958692606,"lng":-68.1033974010827},{"lat":-16.5180323944332,"lng":-68.1088047344568},{"lat":-16.5079106461028,"lng":-68.1101780254724},{"lat":-16.4999280805579,"lng":-68.1110715689683},{"lat":-16.5014094062797,"lng":-68.1022310080552},{"lat":-16.4954840353291,"lng":-68.1018018546128},{"lat":-16.4911221879761,"lng":-68.1036042990708},{"lat":-16.4922743836245,"lng":-68.1068812296189},{"lat":-16.4882416688457,"lng":-68.1077395365037},{"lat":-16.4882416688457,"lng":-68.1130610391892},{"lat":-16.4826207383988,"lng":-68.1149493143357},{"lat":-16.4841021966032,"lng":-68.1185542032517},{"lat":-16.4711802073021,"lng":-68.1134901926316},{"lat":-16.4695340321242,"lng":-68.113919346074},{"lat":-16.468134772229,"lng":-68.117695896367},{"lat":-16.4721679056967,"lng":-68.1220732614793},{"lat":-16.4769417102938,"lng":-68.126708118657},{"lat":-16.4779293793169,"lng":-68.1281672403611},{"lat":-16.4809746604345,"lng":-68.128510563115},{"lat":-16.482456131232,"lng":-68.1297121927537},{"lat":-16.485089829109,"lng":-68.1294547006882},{"lat":-16.4864066646132,"lng":-68.1303507313252},{"lat":-16.4867358720898,"lng":-68.1327539906025},{"lat":-16.4855013411662,"lng":-68.1341272816182},{"lat":-16.4871473806482,"lng":-68.1358438953877},{"lat":-16.4859128523488,"lng":-68.1358438953877},{"lat":-16.4855836434727,"lng":-68.1370455250264},{"lat":-16.4846783161772,"lng":-68.1373030170918},{"lat":-16.4841021966032,"lng":-68.1386763081074},{"lat":-16.4827853454257,"lng":-68.1386763081074},{"lat":-16.4765301800479,"lng":-68.145628593874},{"lat":-16.4711802073021,"lng":-68.149576805544},{"lat":-16.470357121461,"lng":-68.1518942341328}],"metadata":{"pointCount":58}},
+  "B330":{"version":"1.0","exportDate":"2026-03-24T17:18:42.856Z","sucursal":{"keyBodega":"B330","latitud":-16.545222,"longitud":-68.076729},"polygon":[{"lat":-16.5244604561473,"lng":-68.1097114408004},{"lat":-16.5290947946001,"lng":-68.1125800962118},{"lat":-16.5355539623718,"lng":-68.1042545194296},{"lat":-16.5411448244299,"lng":-68.1037824506429},{"lat":-16.5423047514899,"lng":-68.1003581162325},{"lat":-16.5452667416596,"lng":-68.1012164231173},{"lat":-16.5529183390384,"lng":-68.095766174399},{"lat":-16.5605477124766,"lng":-68.103646151686},{"lat":-16.5625633255382,"lng":-68.1003845855239},{"lat":-16.5619463033711,"lng":-68.0884541198256},{"lat":-16.5506220133884,"lng":-68.0870839575134},{"lat":-16.5474132777551,"lng":-68.0860539892517},{"lat":-16.5479480707353,"lng":-68.0822275680989},{"lat":-16.5506220133884,"lng":-68.0765198273152},{"lat":-16.5490999275014,"lng":-68.0729149383992},{"lat":-16.5490638631742,"lng":-68.0565462083887},{"lat":-16.5484879355435,"lng":-68.049937245376},{"lat":-16.5448677796219,"lng":-68.0506238908838},{"lat":-16.5435331711521,"lng":-68.0442318400582},{"lat":-16.540900269585,"lng":-68.0392107447823},{"lat":-16.5370298835722,"lng":-68.0380079862162},{"lat":-16.5315581603406,"lng":-68.0410120603128},{"lat":-16.5306741792404,"lng":-68.0447665686311},{"lat":-16.5328633350595,"lng":-68.0478248499062},{"lat":-16.5363191549373,"lng":-68.0558500192788},{"lat":-16.5382938813688,"lng":-68.0625877283242},{"lat":-16.5373476608087,"lng":-68.0718145273354},{"lat":-16.5332336044347,"lng":-68.0646476648476},{"lat":-16.5302302879079,"lng":-68.0619869135048},{"lat":-16.5285023311975,"lng":-68.065248479667},{"lat":-16.526527504592,"lng":-68.0663642786172},{"lat":-16.5280407755311,"lng":-68.0601428829571},{"lat":-16.5242556644142,"lng":-68.0550359569928},{"lat":-16.5136816457665,"lng":-68.0525897823712},{"lat":-16.5105224812715,"lng":-68.0586520083245},{"lat":-16.5146855805063,"lng":-68.0655261965048},{"lat":-16.5203635006708,"lng":-68.0678436250937},{"lat":-16.5253418295908,"lng":-68.0711910219443},{"lat":-16.5230789687162,"lng":-68.0734655351889},{"lat":-16.5256298281638,"lng":-68.0785724611533},{"lat":-16.5178948602323,"lng":-68.0816623659384},{"lat":-16.5148090153275,"lng":-68.0819198580039},{"lat":-16.5121757220419,"lng":-68.0789586992514},{"lat":-16.5074850795092,"lng":-68.0799457521689},{"lat":-16.5043167741038,"lng":-68.0850955934775},{"lat":-16.5137644298721,"lng":-68.0913612337363},{"lat":-16.5232275825557,"lng":-68.0924770326865},{"lat":-16.5271623375421,"lng":-68.0900562131392},{"lat":-16.5360900093603,"lng":-68.0878246152388},{"lat":-16.5404097023101,"lng":-68.0915153348433},{"lat":-16.5406153995621,"lng":-68.093618186711},{"lat":-16.5384761374215,"lng":-68.0924594724166},{"lat":-16.5320582087002,"lng":-68.0910432660567},{"lat":-16.5263941614371,"lng":-68.0938756787764},{"lat":-16.5230204502684,"lng":-68.0989396893966},{"lat":-16.5252421691279,"lng":-68.1008708798873},{"lat":-16.5244604561473,"lng":-68.1097114408004}],"metadata":{"pointCount":57}},
+  // --- PIZZA HUT ---
+  "PH01":{"version":"1.0","exportDate":"2026-07-21T21:48:20.458Z","sucursal":{"keyBodega":"PH01","latitud":-17.7000625,"longitud":-63.1600625},"polygon":[{"lat":-17.72244446007347,"lng":-63.19026544690133},{"lat":-17.725267621758764,"lng":-63.18174540996552},{"lat":-17.740563019599218,"lng":-63.13656091690064},{"lat":-17.73072220187217,"lng":-63.130252361297615},{"lat":-17.728034532557537,"lng":-63.134967684745796},{"lat":-17.707686649009805,"lng":-63.12118113040925},{"lat":-17.70085410725006,"lng":-63.12141180038453},{"lat":-17.69056647646944,"lng":-63.12358975410462},{"lat":-17.675719154988226,"lng":-63.131008744239814},{"lat":-17.667556439002993,"lng":-63.13858330249787},{"lat":-17.664550912381713,"lng":-63.149285316467285},{"lat":-17.66410365710454,"lng":-63.15785765647889},{"lat":-17.658149944535587,"lng":-63.15755590796471},{"lat":-17.655572369330798,"lng":-63.16495209932328},{"lat":-17.657918641575073,"lng":-63.172027766704566},{"lat":-17.664167550783635,"lng":-63.17362904548646},{"lat":-17.667019741503363,"lng":-63.17822098731995},{"lat":-17.675795822448944,"lng":-63.18857431411744},{"lat":-17.68156112181758,"lng":-63.193144798278816},{"lat":-17.686899481021566,"lng":-63.196127414703376},{"lat":-17.69330581376939,"lng":-63.19707959890366},{"lat":-17.694905444773624,"lng":-63.19771125912668},{"lat":-17.69847773222,"lng":-63.19779977202417},{"lat":-17.701475025864983,"lng":-63.1956633925438},{"lat":-17.70394718053316,"lng":-63.19516986608506},{"lat":-17.707667485550378,"lng":-63.193906545639045},{"lat":-17.712287097615285,"lng":-63.18729892373086},{"lat":-17.714822978998725,"lng":-63.18698376417161}],"metadata":{"pointCount":28}},
+  "PH03":{"version":"1.0","exportDate":"2026-07-22T14:16:42.827Z","sucursal":{"keyBodega":"PH03","latitud":-17.75884,"longitud":-63.17872},"polygon":[{"lat":-17.75144298277326,"lng":-63.12905877828599},{"lat":-17.773137069870504,"lng":-63.14233303070069},{"lat":-17.78954446000467,"lng":-63.14703226089478},{"lat":-17.795612564952542,"lng":-63.157187104225166},{"lat":-17.800904110994985,"lng":-63.167695999145515},{"lat":-17.801685571197005,"lng":-63.174465894699104},{"lat":-17.801854120987983,"lng":-63.186038285493865},{"lat":-17.78968109679224,"lng":-63.17846775054932},{"lat":-17.784651006323408,"lng":-63.18814784288407},{"lat":-17.725271454074722,"lng":-63.18174406886102},{"lat":-17.740565574258447,"lng":-63.13656091690064},{"lat":-17.7454270247475,"lng":-63.13958644866944}],"metadata":{"pointCount":12}},
+  "PH04":{"version":"1.0","exportDate":"2026-07-22T14:12:43.792Z","sucursal":{"keyBodega":"PH04","latitud":-17.7590625,"longitud":-63.1993125},"polygon":[{"lat":-17.759287692622124,"lng":-63.20308506488801},{"lat":-17.762690110427155,"lng":-63.20446372032166},{"lat":-17.776283809406053,"lng":-63.216603398323066},{"lat":-17.785933124582364,"lng":-63.21758508682252},{"lat":-17.79194516591196,"lng":-63.21749925613404},{"lat":-17.79783442047737,"lng":-63.216887712478645},{"lat":-17.801680463625093,"lng":-63.215621709823616},{"lat":-17.806267004312943,"lng":-63.21334719657899},{"lat":-17.812896339118183,"lng":-63.20833683013917},{"lat":-17.801894981519386,"lng":-63.195161819458015},{"lat":-17.801854120987983,"lng":-63.18604230880738},{"lat":-17.789679819813404,"lng":-63.17846909165383},{"lat":-17.78465356035299,"lng":-63.188150525093086},{"lat":-17.725268899197435,"lng":-63.18174675107003},{"lat":-17.72244573753225,"lng":-63.19026544690133},{"lat":-17.72333995644508,"lng":-63.190691918134696},{"lat":-17.721425045065256,"lng":-63.19187074899674},{"lat":-17.725280396144985,"lng":-63.19565266370774},{"lat":-17.727526119094946,"lng":-63.19519937038422},{"lat":-17.729401365620397,"lng":-63.19556415081025},{"lat":-17.734411294493373,"lng":-63.19794595241547},{"lat":-17.740409739978798,"lng":-63.20856213569642},{"lat":-17.739030217491912,"lng":-63.21247816085816},{"lat":-17.736383548307973,"lng":-63.21292877197266},{"lat":-17.727487796413683,"lng":-63.21178615093232},{"lat":-17.725479676452167,"lng":-63.21359395980836},{"lat":-17.728990039383948,"lng":-63.2221931219101},{"lat":-17.734641221574293,"lng":-63.22816371917725},{"lat":-17.741247666968714,"lng":-63.23281466960908},{"lat":-17.74649228554819,"lng":-63.23507308959962},{"lat":-17.75195643734173,"lng":-63.23566317558289},{"lat":-17.75388762640932,"lng":-63.23953360319138},{"lat":-17.75694274538455,"lng":-63.23779821395875},{"lat":-17.758817683874007,"lng":-63.23841780424119},{"lat":-17.77635532556976,"lng":-63.23572754859925},{"lat":-17.773441018720117,"lng":-63.23243916034699},{"lat":-17.77433881419474,"lng":-63.229239284992225},{"lat":-17.776090971036243,"lng":-63.227840512990966},{"lat":-17.77256492945731,"lng":-63.224129676818855},{"lat":-17.770161408877303,"lng":-63.22522535920144},{"lat":-17.77091490711682,"lng":-63.222527056932456},{"lat":-17.76526487006782,"lng":-63.21972951292992},{"lat":-17.76446537029833,"lng":-63.21608304977418},{"lat":-17.760766679484608,"lng":-63.21461588144303},{"lat":-17.75129737598575,"lng":-63.21384876966477},{"lat":-17.751299930491818,"lng":-63.20932924747468}],"metadata":{"pointCount":46}}
+};
+ 
+// =============================================
+// ESTADO DE LA APP
+// =============================================
+let map, drawnLayers = {}, markerLayers = {}, drawControl = null;
+let currentDrawLayer = null, selectedStore = null;
+let newPolygonPoints = null, newPolygonStore = null;
+let storeList = [...STORES_DATA];
+let groupLayers = {};
+ 
+// =============================================
+// INICIALIZAR MAPA
+// =============================================
+function initMap() {
+  map = L.map('map', {
+    center: [-17.82, -63.175],
+    zoom: 12,
+    zoomControl: true,
+  });
+ 
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap contributors, © CARTO',
+    subdomains: 'abcd',
+    maxZoom: 20
+  }).addTo(map);
+ 
+  // Cargar polígonos en tiendas
+  storeList.forEach(store => {
+    if (POLYGONS_RAW[store.keyBodega]) {
+      store.polygon = POLYGONS_RAW[store.keyBodega].polygon;
+      store.hasPolygon = true;
+    }
+    if (POLYGONS_RAW[store.keyBodega + '_NOCHE']) {
+      store.polygonNoche = POLYGONS_RAW[store.keyBodega + '_NOCHE'].polygon;
+    }
+  });
+ 
+  renderAllPolygons();
+  renderAllMarkers();
+  renderStoreList();
+  updateStats();
+  populateDrawSelect();
+setTimeout(() => applyTurnoFilter(), 300);
+ 
+  map.on('click', onMapClick);
+  document.getElementById('right-panel').style.display = 'none';
+}
+ 
+// =============================================
+// RENDERIZAR POLÍGONOS
+// =============================================
+function renderAllPolygons() {
+  // Crear un LayerGroup por cada grupo
+  const grupos = [...new Set(storeList.map(s => s.grupo || 'Sin grupo'))];
+  grupos.forEach(g => {
+    if (!groupLayers[g]) groupLayers[g] = L.layerGroup().addTo(map);
+  });
+
+  storeList.forEach(store => {
+    if (store.hasPolygon && store.polygon) {
+      addPolygonToMap(store);
+    }
+  });
+
+  renderGroupControls();
+}
+
+function addPolygonToMap(store) {
+  if (drawnLayers[store.keyBodega]) {
+    map.removeLayer(drawnLayers[store.keyBodega]);
+  }
+  const coords = store.polygon.map(p => [p.lat, p.lng]);
+  const grupo = store.grupo || 'Sin grupo';
+
+  if (!groupLayers[grupo]) {
+    groupLayers[grupo] = L.layerGroup().addTo(map);
+  }
+
+  const esNoche = store.turno === 'noche';
+  const poly = L.polygon(coords, {
+    color: esNoche ? '#6366f1' : '#333333',
+    weight: 0.8,
+    opacity: 0.9,
+    fillColor: esNoche ? '#6366f1' : '#444444',
+    fillOpacity: 0.35,
+  });
+
+  poly.on('click', (e) => {
+    L.DomEvent.stopPropagation(e);
+    selectStore(store.keyBodega);
+    showStorePopup(store, e.latlng);
+  });
+  poly.on('mouseover', () => poly.setStyle({ fillOpacity: 0.5, weight: 0.8 }));
+  poly.on('mouseout', () => poly.setStyle({ fillOpacity: 0.35, weight: 0.8 }));
+
+  groupLayers[grupo].addLayer(poly);
+  drawnLayers[store.keyBodega] = poly;
+  // Si tiene polígono nocturno, registrarlo también
+  if (store.polygonNoche) {
+    const coordsNoche = store.polygonNoche.map(p => [p.lat, p.lng]);
+    const polyNoche = L.polygon(coordsNoche, {
+      color: '#6366f1',
+      weight: 0.8,
+      opacity: 0.9,
+      fillColor: '#6366f1',
+      fillOpacity: 0.35
+    });
+    polyNoche.on('click', (e) => {
+      L.DomEvent.stopPropagation(e);
+      selectStore(store.keyBodega);
+      showStorePopup(store, e.latlng);
+    });
+    groupLayers[grupo].addLayer(polyNoche);
+    drawnLayers[store.keyBodega + '_NOCHE'] = polyNoche;
+
+    // Ocultar por defecto al cargar (arranca en modo día)
+    groupLayers[grupo].removeLayer(polyNoche);
+  }
+}
+
+function renderAllMarkers() {
+  storeList.forEach(store => {
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="30" viewBox="0 0 36 44">
+        <path d="M18 0C8.06 0 0 8.06 0 18c0 13.5 18 26 18 26S36 31.5 36 18C36 8.06 27.94 0 18 0z"
+              fill="${store.color}" stroke="white" stroke-width="2"/>
+        <circle cx="18" cy="18" r="7" fill="white"/>
+        <circle cx="18" cy="18" r="4" fill="${store.color}"/>
+      </svg>`;
+
+    const icon = L.divIcon({
+      className: '',
+      html: svg,
+      iconSize: [24, 30],
+      iconAnchor: [12, 30],
+      popupAnchor: [0, -30]
+    });
+
+    const grupo = store.grupo || 'Sin grupo';
+    if (!groupLayers[grupo]) {
+      groupLayers[grupo] = L.layerGroup().addTo(map);
+    }
+
+    const marker = L.marker([store.latitud, store.longitud], { icon });
+    marker.on('click', () => {
+      selectStore(store.keyBodega);
+      showStorePopup(store, [store.latitud, store.longitud]);
+    });
+
+    groupLayers[grupo].addLayer(marker);
+    markerLayers[store.keyBodega] = marker;
+  });
+}
+
+function renderGroupControls() {
+  const existing = document.getElementById('group-controls');
+  if (existing) existing.remove();
+
+  const grupos = Object.keys(groupLayers);
+  if (grupos.length === 0) return;
+
+  const grupoColores = {
+    'Amarket': '#ffc72c',
+    'Farmacorp': '#2563eb',
+    'Pizza Hut': '#dc2626',
+    'Proxis': '#f97316',
+    'Sin grupo': '#6b7585'
+  };
+
+  const container = document.createElement('div');
+  container.id = 'group-controls';
+  container.style.cssText = `
+    position: absolute;
+    top: 70px;
+    right: 10px;
+    z-index: 1000;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 8px 12px;
+    min-width: 180px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    font-family: 'DM Sans', sans-serif;
+  `;
+
+  // Checkboxes por grupo
+  grupos.forEach(grupo => {
+    const visible = map.hasLayer(groupLayers[grupo]);
+    const row = document.createElement('label');
+    row.style.cssText = `display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:13px;color:#333;user-select:none;`;
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = visible;
+    checkbox.style.cssText = `width:15px;height:15px;cursor:pointer;accent-color:${grupoColores[grupo] || '#6b7585'};`;
+    checkbox.addEventListener('change', () => toggleGroup(grupo));
+    checkbox.addEventListener('click', (e) => e.stopPropagation());
+    const label = document.createElement('span');
+    label.textContent = grupo;
+    row.appendChild(checkbox);
+    row.appendChild(label);
+    container.appendChild(row);
+  });
+
+  // Separador solo si hay tiendas con turno
+  const hayTurnos = storeList.some(s => s.turno === 'dia' || s.turno === 'noche');
+  if (hayTurnos) {
+    const sep = document.createElement('div');
+    sep.style.cssText = `border-top:1px solid #e5e7eb;margin:6px 0;`;
+    container.appendChild(sep);
+
+    const turnoLabel = document.createElement('div');
+    turnoLabel.style.cssText = `font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px;`;
+    turnoLabel.textContent = 'Turno';
+    container.appendChild(turnoLabel);
+
+    // Switch Día/Noche
+    const switchRow = document.createElement('div');
+    switchRow.style.cssText = `display:flex;align-items:center;gap:10px;padding:4px 0;`;
+
+    const switchLabel = document.createElement('span');
+    switchLabel.id = 'turno-label';
+    switchLabel.style.cssText = `font-size:13px;color:#333;font-weight:600;min-width:50px;`;
+    switchLabel.textContent = 'Día';
+
+    const switchTrack = document.createElement('div');
+    switchTrack.id = 'turno-switch-track';
+    switchTrack.style.cssText = `
+      position: relative;
+      width: 44px;
+      height: 24px;
+      border-radius: 12px;
+      background: #f59e0b;
+      cursor: pointer;
+      transition: background 0.3s;
+      flex-shrink: 0;
+    `;
+
+    const switchThumb = document.createElement('div');
+    switchThumb.style.cssText = `
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: white;
+      transition: transform 0.3s;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    `;
+
+    switchTrack.appendChild(switchThumb);
+
+    // Estado inicial — día activo
+    let turnoEsDia = true;
+
+    switchTrack.addEventListener('click', (e) => {
+      e.stopPropagation();
+      turnoEsDia = !turnoEsDia;
+      if (turnoEsDia) {
+        switchTrack.style.background = '#f59e0b';
+        switchThumb.style.transform = 'translateX(0px)';
+        switchLabel.textContent = 'Día';
+      } else {
+        switchTrack.style.background = '#6366f1';
+        switchThumb.style.transform = 'translateX(20px)';
+        switchLabel.textContent = 'Noche';
+      }
+      applyTurnoFilterSwitch(turnoEsDia);
+    });
+
+    switchRow.appendChild(switchTrack);
+    switchRow.appendChild(switchLabel);
+    container.appendChild(switchRow);
+  }
+
+  document.getElementById('map').appendChild(container);
+
+  // Aplicar filtro de turno al cargar
+  applyTurnoFilter();
+}
+function applyTurnoFilter() {
+  applyTurnoFilterSwitch(true);
+}
+
+function applyTurnoFilterSwitch(esDia) {
+  storeList.forEach(store => {
+    const turno = store.turno || '24h';
+    if (turno === '24h') return;
+
+    const grupo = store.grupo || 'Sin grupo';
+    const grupoVisible = groupLayers[grupo] && map.hasLayer(groupLayers[grupo]);
+    if (!grupoVisible) return;
+
+    const poly = drawnLayers[store.keyBodega];
+    const polyNoche = drawnLayers[store.keyBodega + '_NOCHE'];
+    const marker = markerLayers[store.keyBodega];
+
+    if (turno === 'dia') {
+      // Solo existe de día — se muestra en día, se oculta de noche
+      if (poly) esDia ? groupLayers[grupo].addLayer(poly) : groupLayers[grupo].removeLayer(poly);
+      if (marker) esDia ? groupLayers[grupo].addLayer(marker) : groupLayers[grupo].removeLayer(marker);
+
+    } else if (turno === 'noche') {
+      // Solo existe de noche
+      if (poly) esDia ? groupLayers[grupo].removeLayer(poly) : groupLayers[grupo].addLayer(poly);
+      if (marker) esDia ? groupLayers[grupo].removeLayer(marker) : groupLayers[grupo].addLayer(marker);
+
+    } else if (turno === 'ambos') {
+      // Tiene polígono de día Y de noche — el marcador siempre visible
+      if (poly) esDia ? groupLayers[grupo].addLayer(poly) : groupLayers[grupo].removeLayer(poly);
+      if (polyNoche) esDia ? groupLayers[grupo].removeLayer(polyNoche) : groupLayers[grupo].addLayer(polyNoche);
+      // El marcador siempre se ve
+      if (marker) groupLayers[grupo].addLayer(marker);
+    }
+  });
+}
+
+function toggleGroup(grupo) {
+  if (map.hasLayer(groupLayers[grupo])) {
+    map.removeLayer(groupLayers[grupo]);
+  } else {
+    map.addLayer(groupLayers[grupo]);
+  }
+}
+ 
+// =============================================
+// POPUP DE TIENDA
+// =============================================
+function showStorePopup(store, latlng) {
+  const posHtml = store.pos.map(p => `<a href="${p.url}" target="_blank" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:10px;margin-right:3px;color:var(--accent3);text-decoration:none">${p.nombre}</a>`).join('');
+  const html = `
+    <div class="popup-inner">
+      <div class="popup-code">${store.keyBodega} · ${store.zona}</div>
+      <div class="popup-name">${store.nombre}</div>
+      <div class="popup-divider"></div>
+      <div class="popup-row"><span class="popup-icon">👤</span><div><div class="popup-field-label">${store.cargoLider || 'Líder de tienda'}</div><div>${store.lider}</div></div></div>
+      <div class="popup-row"><span class="popup-icon">📱</span><div><div class="popup-field-label">Celular corporativo</div><div>${store.celularCorp}</div></div></div>
+      <div class="popup-row"><span class="popup-icon">🕐</span><div><div class="popup-field-label">Horario</div><div>${store.horario}</div></div></div>
+      <div class="popup-row"><span class="popup-icon">🖥</span><div><div class="popup-field-label">POS de ventas</div><div style="margin-top:3px">${posHtml}</div></div></div>
+      <div class="popup-divider"></div>
+      <div class="popup-row" style="font-size:11px;color:var(--muted)">
+        <span class="popup-icon">📍</span>
+        <div>${store.latitud.toFixed(6)}, ${store.longitud.toFixed(6)}</div>
+      </div>
+      ${store.hasPolygon ? `<button class="popup-dl-btn" onclick="downloadJSON('${store.keyBodega}')">⬇ Descargar cobertura JSON</button>` : ''}
+    </div>
+  `;
+  L.popup({ maxWidth: 300 })
+    .setLatLng(latlng)
+    .setContent(html)
+    .openOn(map);
+}
+ 
+// =============================================
+// LISTA DE TIENDAS EN SIDEBAR
+// =============================================
+function renderStoreList(filter = '') {
+  const container = document.getElementById('store-list');
+  const filtered = storeList.filter(s =>
+    s.keyBodega.toLowerCase().includes(filter.toLowerCase()) ||
+    s.nombre.toLowerCase().includes(filter.toLowerCase()) ||
+    s.zona.toLowerCase().includes(filter.toLowerCase())
+  );
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty-state">No se encontraron tiendas</div>';
+    return;
+  }
+  container.innerHTML = filtered.map(s => `
+    <div class="store-card ${selectedStore === s.keyBodega ? 'active-card' : ''}" id="card-${s.keyBodega}" onclick="selectStore('${s.keyBodega}')">
+      <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:${s.color};border-radius:3px 0 0 3px"></div>
+      <div class="card-top">
+        <span class="card-code" style="color:${s.color}">${s.keyBodega}</span>
+        <span class="card-badge ${s.hasPolygon ? 'badge-ok' : 'badge-warn'}">${s.hasPolygon ? '✓ Cobertura' : '⚠ Sin cobertura'}</span>
+      </div>
+      <div class="card-name">${s.nombre}</div>
+      <div class="card-meta">📍 ${s.zona} · 👤 ${s.lider}</div>
+      <div class="card-actions">
+        <button class="btn-sm" onclick="event.stopPropagation();zoomToStore('${s.keyBodega}')">Ver en mapa</button>
+        ${s.hasPolygon ? `<button class="btn-sm" onclick="event.stopPropagation();downloadJSON('${s.keyBodega}')">⬇ JSON</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+ 
+function filterStores(val) {
+  renderStoreList(val);
+}
+ 
+function selectStore(key) {
+  selectedStore = key;
+  renderStoreList(document.getElementById('search-stores').value);
+ 
+  // Reset estilos
+  Object.keys(drawnLayers).forEach(k => {
+    if (drawnLayers[k]) drawnLayers[k].setStyle({ fillOpacity: 0.15, weight: 0.8 });
+  });
+  if (drawnLayers[key]) drawnLayers[key].setStyle({ fillOpacity: 0.3, weight: 0.8 });
+ 
+  const store = storeList.find(s => s.keyBodega === key);
+  if (store) renderDetailPanel(store);
+}
+ 
+function zoomToStore(key) {
+  const store = storeList.find(s => s.keyBodega === key);
+  if (!store) return;
+  if (drawnLayers[key]) {
+    map.fitBounds(drawnLayers[key].getBounds(), { padding: [40, 40] });
+  } else {
+    map.setView([store.latitud, store.longitud], 14);
+  }
+  selectStore(key);
+}
+ 
+// =============================================
+// PANEL DETALLE DERECHO
+// =============================================
+function renderDetailPanel(store) {
+  document.getElementById('right-panel').style.display = 'flex';
+  map.invalidateSize();
+  adjustFloatingButtons();
+  const posHtml = store.pos.map(p =>
+    `<a href="${p.url}" target="_blank" style="background:var(--card);border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:11px;margin-right:4px;margin-bottom:4px;display:inline-block;color:var(--accent3);text-decoration:none">🖥 ${p.nombre}</a>`
+  ).join('');
+ 
+  document.getElementById('detail-panel').innerHTML = `
+    <div style="background:var(--card);border:1px solid ${store.color};border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="font-size:10px;color:${store.color};font-weight:700;letter-spacing:1px;font-family:'Cabin',sans-serif;margin-bottom:4px">${store.keyBodega}</div>
+      <div style="font-size:14px;font-weight:600">${store.nombre}</div>
+    </div>
+ 
+    <div class="info-section">
+      <div class="info-label">Zona</div>
+      <div class="info-value highlight">${store.zona}</div>
+    </div>
+    <div class="info-section">
+      <div class="info-row"><span class="icon">👤</span><div><div style="font-size:10px;color:var(--muted)">${store.cargoLider || 'Líder de tienda'}</div><div class="val">${store.lider}</div></div></div>
+      <div class="info-row"><span class="icon">📱</span><div><div style="font-size:10px;color:var(--muted)">Celular corporativo</div><div class="val">${store.celularCorp}</div></div></div>
+      <div class="info-row"><span class="icon">🕐</span><div><div style="font-size:10px;color:var(--muted)">Horario</div><div class="val">${store.horario}</div></div></div>
+    </div>
+    <div class="info-section">
+      <div class="info-label">POS de ventas</div>
+      <div>${posHtml}</div>
+    </div>
+    <div class="info-section">
+      <div class="info-label">Ubicación</div>
+      <div style="font-size:11px;color:var(--muted);font-family:monospace">${store.latitud}, ${store.longitud}</div>
+    </div>
+    <div class="info-section">
+      <div class="info-label">Cobertura</div>
+      <div style="font-size:12px;margin-bottom:8px">
+        ${store.hasPolygon
+          ? `<span style="color:var(--accent)">✓ Activa</span> · ${store.polygon.length} puntos`
+          : `<span style="color:var(--warn)">⚠ Sin cobertura asignada</span>`}
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button class="btn-sm primary" onclick="zoomToStore('${store.keyBodega}')" style="padding:8px">Ver en mapa</button>
+      ${store.hasPolygon ? `<button class="btn-sm" onclick="downloadJSON('${store.keyBodega}')" style="padding:8px;border-color:var(--accent3);color:var(--accent3)">⬇ Descargar JSON</button>` : ''}
+    </div>
+  `;
+}
+ 
+// =============================================
+// DESCARGAR JSON
+// =============================================
+function downloadJSON(key) {
+  const store = storeList.find(s => s.keyBodega === key);
+  if (!store || !store.polygon) return;
+  const data = {
+    version: "1.0",
+    exportDate: new Date().toISOString(),
+    sucursal: {
+      keyBodega: store.keyBodega,
+      latitud: store.latitud,
+      longitud: store.longitud
+    },
+    polygon: store.polygon,
+    metadata: {
+      pointCount: store.polygon.length
+    }
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `poligono-${key}-${Date.now()}.json`;
+  a.click();
+  showToast(`Descargado: poligono-${key}.json`, 'success');
+}
+ 
+// =============================================
+// BUSCAR COORDENADA EN COBERTURAS
+// =============================================
+function lookupCoordinate() {
+  const raw = document.getElementById('lookup-coords').value.trim();
+  let lat, lng;
+  if (raw.includes('google.com/maps') || raw.includes('maps.google')) {
+   // Intentar extraer coordenadas de URL larga de Google Maps
+   // Formato: ?q=lat,lng
+   const qMatch = raw.match(/[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+   // Formato: @lat,lng
+   const atMatch = raw.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+   // Formato: /place/lat,lng
+   const placeMatch = raw.match(/\/place\/(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+
+   if (qMatch) {
+    lat = parseFloat(qMatch[1]);
+    lng = parseFloat(qMatch[2]);
+   } else if (atMatch) {
+    lat = parseFloat(atMatch[1]);
+    lng = parseFloat(atMatch[2]);
+   } else if (placeMatch) {
+    lat = parseFloat(placeMatch[1]);
+    lng = parseFloat(placeMatch[2]);
+   } else {
+    showToast('No se pudieron extraer coordenadas de ese enlace', 'error');
+    return;
+   }
+  } else if (raw.includes('maps.app.goo.gl')) {
+   showToast('Enlace corto no soportado — usa el enlace largo o pega las coordenadas directamente', 'warn');
+   return;
+  } else {
+   // Coordenadas directas: -17.8155,-63.2268
+   const parts = raw.split(',');
+   if (parts.length < 2) { showToast('Formato: latitud,longitud', 'error'); return; }
+   lat = parseFloat(parts[0].trim());
+   lng = parseFloat(parts[1].trim());
+  }
+
+  if (isNaN(lat) || isNaN(lng)) { showToast('Coordenadas inválidas', 'error'); return; }
+ 
+  const matches = storeList.filter(s => s.hasPolygon && pointInPolygon(lat, lng, s.polygon));
+  const resultBox = document.getElementById('lookup-result');
+  const overlapWarn = document.getElementById('overlap-warn');
+ 
+  // Poner pin temporal en mapa
+  map.eachLayer(l => { if (l._isLookupPin) map.removeLayer(l); });
+  document.getElementById('btn-clear-pin').style.display = 'block';
+  const pin = L.circleMarker([lat, lng], {
+    radius: 8, color: '#fff', weight: 2, fillColor: matches.length > 0 ? '#00e5a0' : '#ff4757', fillOpacity: 1
+  }).addTo(map);
+  pin._isLookupPin = true;
+  map.setView([lat, lng], 14);
+ 
+  if (matches.length === 0) {
+    resultBox.className = 'result-box visible result-notfound';
+    resultBox.innerHTML = `<div style="color:var(--danger);font-weight:600;margin-bottom:6px">❌ Fuera de cobertura</div>
+    <div style="font-size:12px;color:var(--muted)">Las coordenadas <strong style="color:var(--text)">${lat}, ${lng}</strong> no pertenecen a ninguna cobertura activa.</div>`;
+    overlapWarn.className = 'overlap-warn';
+  } else if (matches.length === 1) {
+    const s = matches[0];
+    resultBox.className = 'result-box visible result-found';
+    resultBox.innerHTML = `<div style="color:var(--accent);font-weight:600;margin-bottom:8px">✓ Dentro de cobertura</div>
+    <div style="background:${s.colorDark};border-radius:7px;padding:8px;margin-bottom:6px">
+      <div style="font-size:10px;color:${s.color};font-weight:700;letter-spacing:0.8px">${s.keyBodega}</div>
+      <div style="font-size:13px;font-weight:600">${s.nombre}</div>
+    </div>
+    <div style="font-size:11px;color:var(--muted)">Líder: ${s.lider}<br>Tel: ${s.celularCorp}</div>`;
+    overlapWarn.className = 'overlap-warn';
+  } else {
+    resultBox.className = 'result-box visible';
+    resultBox.innerHTML = `<div style="color:var(--accent);font-weight:600;margin-bottom:8px">✓ Cobertura múltiple</div>
+<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Esta ubicación está cubierta por ${matches.length} tiendas:</div>` +
+  matches.map(s => `<div style="background:var(--card);border-radius:7px;padding:6px 8px;margin-bottom:4px;border-left:3px solid ${s.color}">
+    <div style="font-size:10px;color:${s.color};font-weight:700;display:flex;align-items:center;gap:6px">
+      ${s.keyBodega} · ${s.grupo}
+      <span style="background:${s.turno==='noche'?'#8a87b8':s.turno==='dia'?'#d4b539':'#f0fdf4'};color:${s.turno==='noche'?'#ffffff':s.turno==='dia'?'#ffffff':'#4f4f50'};font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;letter-spacing:0.3px">
+        ${s.turno==='noche'?'🌙 Noche':s.turno==='dia'?'☀ Día':'🕐 24h'}
+      </span>
+    </div>
+    <div style="font-size:12px">${s.nombre}</div>
+  </div>`).join('');
+    overlapWarn.className = '';
+  }
+}
+ 
+// =============================================
+// MODO CLIC EN MAPA PARA BUSCAR
+// =============================================
+function clearLookupPin() {
+  map.eachLayer(l => { if (l._isLookupPin) map.removeLayer(l); });
+  document.getElementById('lookup-coords').value = '';
+  document.getElementById('lookup-result').className = 'result-box';
+  document.getElementById('lookup-result').innerHTML = '';
+  document.getElementById('overlap-warn').className = 'overlap-warn';
+  document.getElementById('btn-clear-pin').style.display = 'none';
+}
+ 
+// =============================================
+// DIBUJAR NUEVA COBERTURA
+// =============================================
+function populateDrawSelect() {
+  const sel = document.getElementById('draw-store-select');
+  storeList.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.keyBodega;
+    opt.textContent = `${s.keyBodega} — ${s.nombre}`;
+    sel.appendChild(opt);
+  });
+}
+ 
+function startDrawing() {
+  const key = document.getElementById('draw-store-select').value;
+  if (!key) { showToast('Selecciona una tienda primero', 'error'); return; }
+
+  if (currentDrawLayer) { map.removeLayer(currentDrawLayer); currentDrawLayer = null; }
+
+  document.getElementById('draw-status').textContent = 'Haz clic para agregar puntos. Clic en el primer punto para cerrar.';
+  document.getElementById('new-coverage-box').style.display = 'none';
+
+  const store = storeList.find(s => s.keyBodega === key);
+  const drawnPoints = [];
+  let tempPolyline = null, markers = [];
+  let firstMarker = null;
+
+  // Poner coberturas en modo referencia
+  Object.values(drawnLayers).forEach(layer => {
+    layer.setStyle({ opacity: 0.3, fillOpacity: 0.1 });
+    layer.options.interactive = false;
+    layer.off('click');
+  });
+
+  map.getContainer().style.cursor = 'crosshair';
+
+  // Botón deshacer
+  const undoBtn = document.createElement('button');
+  undoBtn.id = 'btn-undo-draw';
+  undoBtn.textContent = '↩ Deshacer punto';
+  undoBtn.style.cssText = `
+    position:fixed;bottom:110px;right:24px;z-index:2000;
+    background:white;border:1px solid #ccc;border-radius:8px;
+    padding:7px 14px;font-family:'DM Sans',sans-serif;font-size:12px;
+    font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.15);
+    display:none;
+  `;
+  undoBtn.onclick = undoLastPoint;
+  document.body.appendChild(undoBtn);
+
+  function redrawPreview() {
+    if (tempPolyline) map.removeLayer(tempPolyline);
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+
+    drawnPoints.forEach((pt, i) => {
+      const isFirst = i === 0;
+      const m = L.circleMarker([pt[0], pt[1]], {
+        radius: isFirst ? 8 : 5,
+        color: isFirst ? '#fff' : store.color,
+        fillColor: isFirst ? store.color : store.color,
+        fillOpacity: 1,
+        weight: isFirst ? 3 : 2
+      }).addTo(map);
+
+      // Zona de cierre amplia en el primer punto
+      if (isFirst) {
+        m.on('click', (e) => {
+          L.DomEvent.stopPropagation(e);
+          if (drawnPoints.length >= 3) finishDraw();
+        });
+        m.on('mouseover', () => map.getContainer().style.cursor = 'pointer');
+        m.on('mouseout', () => map.getContainer().style.cursor = 'crosshair');
+      }
+      markers.push(m);
+    });
+
+    if (drawnPoints.length > 1) {
+      tempPolyline = L.polyline([...drawnPoints, drawnPoints[0]], {
+        color: store.color, dashArray: '6 4', weight: 2
+      }).addTo(map);
+    }
+
+    const n = drawnPoints.length;
+    document.getElementById('draw-status').textContent =
+      n === 0 ? 'Haz clic para agregar puntos.' :
+      n < 3   ? `${n} punto${n>1?'s':''} — necesitas al menos 3` :
+                `${n} puntos — haz clic en el primer punto (●) o doble clic para cerrar`;
+
+    undoBtn.style.display = n > 0 ? 'block' : 'none';
+  }
+
+  function undoLastPoint() {
+    if (drawnPoints.length === 0) return;
+    drawnPoints.pop();
+    redrawPreview();
+    if (drawnPoints.length === 0) undoBtn.style.display = 'none';
+    showToast('Punto eliminado', 'warn');
+  }
+
+  function drawHandler(e) {
+    // Verificar si el clic está cerca del primer punto para cerrar
+    if (drawnPoints.length >= 3) {
+      const first = drawnPoints[0];
+      const dist = map.distance([e.latlng.lat, e.latlng.lng], [first[0], first[1]]);
+      const pixelTolerance = 20 / Math.pow(2, map.getZoom() - 10);
+      if (dist < 2) { finishDraw(); return; }
+    }
+    drawnPoints.push([e.latlng.lat, e.latlng.lng]);
+    redrawPreview();
+  }
+
+  function finishDraw() {
+    map.off('click', drawHandler);
+    map.off('dblclick', finishDraw);
+    map.getContainer().style.cursor = '';
+
+    if (tempPolyline) map.removeLayer(tempPolyline);
+    markers.forEach(m => map.removeLayer(m));
+
+    const undoEl = document.getElementById('btn-undo-draw');
+    if (undoEl) undoEl.remove();
+
+    if (drawnPoints.length < 3) {
+      showToast('Necesitas al menos 3 puntos', 'error');
+      document.getElementById('draw-status').textContent = '';
+      restorePolygons();
+      return;
+    }
+
+    const closedPolygon = [...drawnPoints, drawnPoints[0]];
+    const polygon = closedPolygon.map(p => ({ lat: p[0], lng: p[1] }));
+    newPolygonPoints = polygon;
+    newPolygonStore = key;
+
+    const overlaps = checkOverlaps(polygon);
+
+    currentDrawLayer = L.polygon(drawnPoints, {
+      color: overlaps.length > 0 ? '#ff4757' : store.color,
+      weight: 2,
+      fillColor: store.color,
+      fillOpacity: 0.25
+    }).addTo(map);
+
+    let infoHtml = `<div style="margin-bottom:6px"><span style="color:${store.color};font-weight:700">${key}</span> — ${store.nombre}</div>`;
+    infoHtml += `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">${drawnPoints.length} vértices · polígono cerrado ✓</div>`;
+
+    if (overlaps.length > 0) {
+      infoHtml += `<div style="margin-top:8px;padding:8px;background:rgba(255,71,87,0.1);border-radius:6px;border:1px solid rgba(255,71,87,0.3)">
+        <div style="color:var(--danger);font-size:11px;font-weight:600;margin-bottom:4px">⚠ Solapamiento detectado</div>
+        ${overlaps.map(o => `<div style="font-size:11px;color:var(--muted)">• Choca con <strong style="color:var(--text)">${o}</strong></div>`).join('')}
+      </div>`;
+    } else {
+      infoHtml += `<div style="color:var(--accent);font-size:11px">✓ Sin solapamientos</div>`;
+    }
+
+    infoHtml += `<div style="margin-top:8px">
+      <button onclick="reopenPolygon()" style="width:100%;padding:7px;background:none;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;cursor:pointer;color:var(--muted)">↩ Reabrir polígono</button>
+      </div>`;
+    document.getElementById('new-coverage-info').innerHTML = infoHtml;
+    document.getElementById('new-coverage-box').style.display = 'block';
+    document.getElementById('draw-status').textContent = '';
+    restorePolygons();
+  }
+
+  // Separar clic simple de doble clic
+  let clickTimer = null;
+  map.on('click', function(e) {
+    if (clickTimer) return;
+    clickTimer = setTimeout(() => { clickTimer = null; drawHandler(e); }, 220);
+  });
+
+  map.on('dblclick', function(e) {
+    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+    L.DomEvent.preventDefault(e);
+    if (drawnPoints.length >= 3) finishDraw();
+  });
+}
+ 
+function checkOverlaps(newPolygon) {
+  const overlappingStores = [];
+  const sample = samplePolygon(newPolygon, 20);
+  storeList.forEach(s => {
+    if (s.keyBodega === newPolygonStore || !s.hasPolygon) return;
+    const hasOverlap = sample.some(pt => pointInPolygon(pt[0], pt[1], s.polygon));
+    if (hasOverlap) overlappingStores.push(s.keyBodega);
+  });
+  return overlappingStores;
+}
+ 
+function samplePolygon(polygon, n) {
+  const pts = polygon.map(p => [p.lat, p.lng]);
+  if (pts.length <= n) return pts;
+  const step = Math.floor(pts.length / n);
+  return pts.filter((_, i) => i % step === 0);
+}
+ 
+function saveNewCoverage() {
+  if (!newPolygonPoints || !newPolygonStore) return;
+  const store = storeList.find(s => s.keyBodega === newPolygonStore);
+  if (!store) return;
+  store.polygon = newPolygonPoints;
+  store.hasPolygon = true;
+  POLYGONS_RAW[newPolygonStore] = {
+    version: "1.0", exportDate: new Date().toISOString(),
+    sucursal: { keyBodega: store.keyBodega, latitud: store.latitud, longitud: store.longitud },
+    polygon: newPolygonPoints, metadata: { pointCount: newPolygonPoints.length }
+  };
+  addPolygonToMap(store);
+  document.getElementById('new-coverage-box').style.display = 'none';
+  if (currentDrawLayer) { map.removeLayer(currentDrawLayer); currentDrawLayer = null; }
+  newPolygonPoints = null;
+  newPolygonStore = null;
+
+  // Desactivar completamente el modo dibujo
+  map.off('click');
+  map.off('dblclick');
+  map.getContainer().style.cursor = '';
+  map.on('click', onMapClick);
+
+  renderStoreList();
+  updateStats();
+  showToast(`Cobertura de ${store.keyBodega} guardada`, 'success');
+}
+const CIUDADES_IMPORT = [
+  { nombre: "Santa Cruz", latMin: -18.2, latMax: -17.4, lngMin: -63.4, lngMax: -62.9 },
+  { nombre: "La Paz",     latMin: -16.7, latMax: -16.3, lngMin: -68.3, lngMax: -67.9 },
+  { nombre: "Cochabamba", latMin: -17.6, latMax: -17.2, lngMin: -66.4, lngMax: -65.9 },
+  { nombre: "Sucre",      latMin: -19.2, latMax: -18.9, lngMin: -65.4, lngMax: -65.1 },
+  { nombre: "Oruro",      latMin: -18.1, latMax: -17.8, lngMin: -68.0, lngMax: -67.7 },
+];
+
+function detectCiudadImport(lat, lng) {
+  for (const c of CIUDADES_IMPORT) {
+    if (lat >= c.latMin && lat <= c.latMax && lng >= c.lngMin && lng <= c.lngMax) return c.nombre;
+  }
+  return 'Desconocida';
+}
+
+function detectZonaImport(lat, lng, ciudad) {
+  if (ciudad === 'Santa Cruz') {
+    if (lat > -17.72) return 'Norte';
+    if (lat < -17.85) return 'Sur';
+    if (lng > -63.15) return 'Este';
+    if (lng < -63.25) return 'Oeste';
+    return 'Centro';
+  }
+  if (ciudad === 'La Paz') {
+    if (lat > -16.48) return 'Norte';
+    if (lat < -16.54) return 'Sur';
+    if (lng > -68.10) return 'Este';
+    if (lng < -68.18) return 'Oeste';
+    return 'Centro';
+  }
+  if (ciudad === 'Cochabamba') {
+    if (lat > -17.35) return 'Norte';
+    if (lat < -17.45) return 'Sur';
+    if (lng > -66.10) return 'Este';
+    if (lng < -66.20) return 'Oeste';
+    return 'Centro';
+  }
+  return 'Centro';
+}
+
+function processImportFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const key = data.sucursal.keyBodega;
+      const lat = data.sucursal.latitud;
+      const lng = data.sucursal.longitud;
+      const pts = data.polygon.length;
+      const fecha = data.exportDate;
+      const ciudad = detectCiudadImport(lat, lng);
+      const zona = detectZonaImport(lat, lng, ciudad);
+
+      // Generar línea única para POLYGONS_RAW
+      const polyPts = data.polygon.map(p => `{"lat":${p.lat},"lng":${p.lng}}`).join(',');
+      const polyLine = `,"${key}":{"version":"1.0","exportDate":"${fecha}","sucursal":{"keyBodega":"${key}","latitud":${lat},"longitud":${lng}},"polygon":[${polyPts}],"metadata":{"pointCount":${pts}}}`;
+
+      document.getElementById('import-zona').textContent = `📍 ${ciudad} — ${zona}`;
+      document.getElementById('import-code').textContent = polyLine;
+      document.getElementById('import-result').style.display = 'block';
+      document.getElementById('import-drop').style.borderColor = 'var(--accent3)';
+
+      showToast(`JSON importado: ${key} · ${zona}`, 'success');
+    } catch {
+      showToast('Archivo JSON inválido', 'error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function onImportDrop(e) {
+  e.preventDefault();
+  document.getElementById('import-drop').style.borderColor = 'var(--border)';
+  const file = e.dataTransfer.files[0];
+  if (file) processImportFile(file);
+}
+
+function copyImportCode() {
+  const text = document.getElementById('import-code').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('btn-import-copy');
+    btn.textContent = '✓ Copiado';
+    setTimeout(() => btn.textContent = 'Copiar', 2000);
+  });
+} 
+function reopenPolygon() {
+  // Quitar el polígono cerrado del mapa
+  if (currentDrawLayer) { map.removeLayer(currentDrawLayer); currentDrawLayer = null; }
+  document.getElementById('new-coverage-box').style.display = 'none';
+
+  // Recuperar los puntos sin el último (el de cierre)
+  let pts = [...newPolygonPoints];
+  if (pts.length > 1) {
+    const first = pts[0], last = pts[pts.length - 1];
+    if (first.lat === last.lat && first.lng === last.lng) pts.pop();
+  }
+
+  newPolygonPoints = null;
+  newPolygonStore = null;
+
+  // Reactivar el dibujo con los puntos que ya tenía
+  const key = document.getElementById('draw-store-select').value;
+  if (!key) return;
+  const store = storeList.find(s => s.keyBodega === key);
+
+  // Restaurar coberturas a modo referencia
+  Object.values(drawnLayers).forEach(layer => {
+    layer.setStyle({ opacity: 0.3, fillOpacity: 0.1 });
+    layer.options.interactive = false;
+    layer.off('click');
+  });
+
+  map.getContainer().style.cursor = 'crosshair';
+  const drawnPoints = pts.map(p => [p.lat, p.lng]);
+  let tempPolyline = null, markers = [];
+
+  // Botón deshacer
+  let undoBtn = document.getElementById('btn-undo-draw');
+  if (!undoBtn) {
+    undoBtn = document.createElement('button');
+    undoBtn.id = 'btn-undo-draw';
+    undoBtn.style.cssText = `position:fixed;bottom:110px;right:24px;z-index:2000;background:white;border:1px solid #ccc;border-radius:8px;padding:7px 14px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.15);`;
+    document.body.appendChild(undoBtn);
+  }
+  undoBtn.textContent = '↩ Deshacer punto';
+  undoBtn.style.display = 'block';
+  undoBtn.onclick = undoLastPoint;
+
+  function redrawPreview() {
+    if (tempPolyline) map.removeLayer(tempPolyline);
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+    drawnPoints.forEach((pt, i) => {
+      const isFirst = i === 0;
+      const m = L.circleMarker([pt[0], pt[1]], {
+        radius: isFirst ? 8 : 5,
+        color: isFirst ? '#fff' : store.color,
+        fillColor: store.color,
+        fillOpacity: 1, weight: isFirst ? 3 : 2
+      }).addTo(map);
+      if (isFirst) {
+        m.on('click', (e) => { L.DomEvent.stopPropagation(e); if (drawnPoints.length >= 3) finishDraw(); });
+        m.on('mouseover', () => map.getContainer().style.cursor = 'pointer');
+        m.on('mouseout', () => map.getContainer().style.cursor = 'crosshair');
+      }
+      markers.push(m);
+    });
+    if (drawnPoints.length > 1) {
+      tempPolyline = L.polyline([...drawnPoints, drawnPoints[0]], {
+        color: store.color, dashArray: '6 4', weight: 2
+      }).addTo(map);
+    }
+    const n = drawnPoints.length;
+    document.getElementById('draw-status').textContent =
+      n < 3 ? `${n} puntos — necesitas al menos 3` :
+               `${n} puntos — clic en ● o doble clic para cerrar`;
+    undoBtn.style.display = n > 0 ? 'block' : 'none';
+  }
+
+  function undoLastPoint() {
+    if (drawnPoints.length === 0) return;
+    drawnPoints.pop();
+    redrawPreview();
+    showToast('Punto eliminado', 'warn');
+  }
+
+  function drawHandler(e) {
+    if (drawnPoints.length >= 3) {
+      const first = drawnPoints[0];
+      const dist = map.distance([e.latlng.lat, e.latlng.lng], [first[0], first[1]]);
+      if (dist < 40) { finishDraw(); return; }
+    }
+    drawnPoints.push([e.latlng.lat, e.latlng.lng]);
+    redrawPreview();
+  }
+
+  function finishDraw() {
+    map.off('click', drawHandler);
+    map.off('dblclick', finishDrawDbl);
+    map.getContainer().style.cursor = '';
+    if (tempPolyline) map.removeLayer(tempPolyline);
+    markers.forEach(m => map.removeLayer(m));
+    const undoEl = document.getElementById('btn-undo-draw');
+    if (undoEl) undoEl.remove();
+    if (drawnPoints.length < 3) { showToast('Necesitas al menos 3 puntos', 'error'); restorePolygons(); return; }
+
+    const polygon = [...drawnPoints, drawnPoints[0]].map(p => ({ lat: p[0], lng: p[1] }));
+    newPolygonPoints = polygon;
+    newPolygonStore = key;
+    const overlaps = checkOverlaps(polygon);
+    currentDrawLayer = L.polygon(drawnPoints, {
+      color: overlaps.length > 0 ? '#ff4757' : store.color,
+      weight: 2, fillColor: store.color, fillOpacity: 0.25
+    }).addTo(map);
+
+    let infoHtml = `<div style="margin-bottom:6px"><span style="color:${store.color};font-weight:700">${key}</span> — ${store.nombre}</div>`;
+    infoHtml += `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">${drawnPoints.length} vértices · polígono cerrado ✓</div>`;
+    if (overlaps.length > 0) {
+      infoHtml += `<div style="margin-top:8px;padding:8px;background:rgba(255,71,87,0.1);border-radius:6px;border:1px solid rgba(255,71,87,0.3)"><div style="color:var(--danger);font-size:11px;font-weight:600;margin-bottom:4px">⚠ Solapamiento</div>${overlaps.map(o=>`<div style="font-size:11px;color:var(--muted)">• ${o}</div>`).join('')}</div>`;
+    } else {
+      infoHtml += `<div style="color:var(--accent);font-size:11px">✓ Sin solapamientos</div>`;
+    }
+    infoHtml += `<div style="margin-top:8px"><button onclick="reopenPolygon()" style="width:100%;padding:7px;background:none;border:1px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;cursor:pointer;color:var(--muted)">↩ Reabrir polígono</button></div>`;
+    document.getElementById('new-coverage-info').innerHTML = infoHtml;
+    document.getElementById('new-coverage-box').style.display = 'block';
+    document.getElementById('draw-status').textContent = '';
+    restorePolygons();
+  }
+
+  let clickTimer = null;
+  function finishDrawDbl(e) {
+    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; }
+    L.DomEvent.preventDefault(e);
+    if (drawnPoints.length >= 3) finishDraw();
+  }
+
+  map.on('click', function(e) {
+    if (clickTimer) return;
+    clickTimer = setTimeout(() => { clickTimer = null; drawHandler(e); }, 220);
+  });
+  map.on('dblclick', finishDrawDbl);
+
+  redrawPreview();
+  showToast('Polígono reabierto — continúa dibujando', 'success');
+}
+function cancelNewCoverage() {
+  if (currentDrawLayer) { map.removeLayer(currentDrawLayer); currentDrawLayer = null; }
+  newPolygonPoints = null; newPolygonStore = null;
+  document.getElementById('new-coverage-box').style.display = 'none';
+  document.getElementById('draw-status').textContent = '';
+
+  // Restaurar coberturas a modo normal
+  storeList.forEach(s => {
+    if (drawnLayers[s.keyBodega]) {
+      drawnLayers[s.keyBodega].setStyle({ opacity: 0.9, fillOpacity: 0.35 });
+      drawnLayers[s.keyBodega].options.interactive = true;
+      drawnLayers[s.keyBodega].on('click', (e) => {
+        L.DomEvent.stopPropagation(e);
+        selectStore(s.keyBodega);
+        showStorePopup(s, e.latlng);
+      });
+    }
+  });
+}
+ 
+function exportNewCoverage() {
+  if (!newPolygonPoints || !newPolygonStore) return;
+  const store = storeList.find(s => s.keyBodega === newPolygonStore);
+
+  // Quitar el último punto si es igual al primero (cierre del polígono)
+  let polygon = [...newPolygonPoints];
+  const first = polygon[0], last = polygon[polygon.length - 1];
+  if (first.lat === last.lat && first.lng === last.lng) polygon.pop();
+
+  const data = {
+    version: "1.0",
+    exportDate: new Date().toISOString(),
+    sucursal: {
+      keyBodega: store.keyBodega,
+      latitud: store.latitud,
+      longitud: store.longitud
+    },
+    polygon: polygon,
+    metadata: {
+      pointCount: polygon.length
+    }
+  };
+
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `poligono-${store.keyBodega}-${Date.now()}.json`;
+  a.click();
+  showToast(`Descargado: poligono-${store.keyBodega}.json`, 'success');
+}
+ 
+// =============================================
+// POINT IN POLYGON (Ray Casting)
+// =============================================
+function pointInPolygon(lat, lng, polygon) {
+  let inside = false;
+  const x = lng, y = lat;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].lng, yi = polygon[i].lat;
+    const xj = polygon[j].lng, yj = polygon[j].lat;
+    const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+ 
+// =============================================
+// UTILIDADES
+// =============================================
+function toggleSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  const btn = document.getElementById('sidebar-toggle');
+  const isCollapsed = sidebar.classList.toggle('collapsed');
+  btn.textContent = isCollapsed ? '›' : '‹';
+  btn.title = isCollapsed ? 'Expandir panel' : 'Contraer panel';
+  setTimeout(() => map.invalidateSize(), 260);
+}
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    const names = ['tiendas', 'buscar', 'nueva'];
+    b.classList.toggle('active', names[i] === name);
+  });
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+}
+ 
+function updateStats() {
+  const total = storeList.length;
+  document.getElementById('stat-nacional').textContent = `${total} tiendas nacional`;
+
+  // Contar por grupo
+  const conteos = {};
+  storeList.forEach(s => {
+    const g = s.grupo || 'Otro';
+    conteos[g] = (conteos[g] || 0) + 1;
+  });
+
+  const colores = {
+    'Amarket':    '#ffc72c',
+    'Farmacorp':  '#2563eb',
+    'Pizza Hut':  '#dc2626',
+    'Proxis':     '#f97316',
+    'Dr Osvaldo': '#8b5cf6',
+  };
+
+  const container = document.getElementById('stat-grupos-container');
+  container.innerHTML = '';
+
+  Object.entries(conteos).forEach(([grupo, count]) => {
+    const color = colores[grupo] || '#6b7585';
+    const pill = document.createElement('div');
+    pill.style.cssText = `
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 12px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    `;
+    pill.innerHTML = `
+      <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;display:inline-block"></span>
+      ${grupo} · <strong>${count}</strong>
+    `;
+    container.appendChild(pill);
+  });
+}
+ 
+let toastTimer;
+function toggleRightPanel() {
+  const panel = document.getElementById('right-panel');
+  const isVisible = panel.style.display === 'flex';
+  panel.style.display = isVisible ? 'none' : 'flex';
+  adjustFloatingButtons();
+  setTimeout(() => map.invalidateSize(), 100);
+}
+
+function adjustFloatingButtons() {
+  const panel = document.getElementById('right-panel');
+  const sidebar = document.querySelector('.sidebar');
+  const isFullscreen = sidebar.style.display === 'none';
+  const isPanelOpen = panel.style.display === 'flex';
+  const offset = (!isFullscreen && isPanelOpen) ? (280 + 24) + 'px' : '24px';
+  document.getElementById('btn-open-panel').style.right = offset;
+  document.getElementById('btn-fullmap').style.right = offset;
+}
+function toggleFullMap() {
+  const sidebar = document.querySelector('.sidebar');
+  const btn = document.getElementById('btn-fullmap');
+  const isFullscreen = sidebar.style.display === 'none';
+
+  if (isFullscreen) {
+    sidebar.style.display = '';
+    btn.textContent = '⛶';
+    btn.title = 'Pantalla completa';
+  } else {
+    sidebar.style.display = 'none';
+    btn.textContent = '⛶';
+    btn.title = 'Salir de pantalla completa';
+  }
+
+  document.getElementById('right-panel').style.display = 'none';
+  adjustFloatingButtons();
+  setTimeout(() => map.invalidateSize(), 100);
+}
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = '', 2800);
+}
+ 
+// =============================================
+// INICIAR
+// =============================================
+window.addEventListener('load', initMap);
+</script>
+</body>
+</html>
